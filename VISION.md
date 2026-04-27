@@ -83,7 +83,7 @@ See `SESSION-1.md` for shipped details.
 **1. AI scoring on ingest (synchronous).**
 - Every event passing through `POST /api/ingest` is scored by AI before the endpoint returns.
 - Primary provider: Groq, model `llama-3.3-70b-versatile`.
-- Fallback provider: Gemini (model selected at setup, likely `gemini-2.0-flash`).
+- Fallback provider: **deferred**. Gemini was the planned fallback but free-tier quota was exhausted at setup; integration architecture leaves a clean hook (`tryFallback()`) for any future provider. If Groq fails, severity stays `unknown` and the AI failure UI banner activates.
 - Strict JSON output: AI returns `{severity, mitre_technique, summary, reasoning}`.
 - `severity` ∈ `{critical, high, medium, low, unknown}`.
 - `mitre_technique` ∈ `{T1110.001, T1110.003, T1078, T1548.003, T1136, T1098, unknown}`.
