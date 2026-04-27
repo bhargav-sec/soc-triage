@@ -1,22 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase";
+import { scoreEvent } from "@/lib/ai-scorer";
 
 /**
  * POST /api/ingest
  *
- * Accepts a single security event and writes it to the events table.
+ * Phase 1: validate body, insert into events table.
+ * Phase 2: after insert, score with AI and update the row with severity,
+ *          mitre_technique, ai_summary, ai_reasoning, ai_provider.
+ *          Always returns 201 on successful insert, even if AI scoring fails.
  *
  * Required body fields:
- *   - source_type:  string   (e.g. "linux_auth")
+ *   - source_type:  string
  *   - event_time:   ISO-8601 string
- *   - raw_payload:  string   (the original log line)
+ *   - raw_payload:  string
  *
  * Optional body fields:
  *   - source_host:  string
- *   - parsed:       object   (parsed fields, JSONB)
+ *   - parsed:       object
  *
  * Response:
- *   201 { id, received_at, status }
+ *   201 { id, received_at, status, severity, mitre_technique, ai_provider }
  *   400 { error, field? }
  *   500 { error }
  */
@@ -35,10 +39,7 @@ export async function POST(request: NextRequest) {
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json(
-      { error: "invalid_json" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
   // 2. Validate required fields
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Validate event_time is parseable
+  // 3. Validate event_time
   const eventTime = new Date(body.event_time as string);
   if (Number.isNaN(eventTime.getTime())) {
     return NextResponse.json(
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 4. Validate optional `parsed` is an object if present
+  // 4. Validate optional `parsed`
   let parsed: Record<string, unknown> = {};
   if (body.parsed !== undefined && body.parsed !== null) {
     if (typeof body.parsed !== "object" || Array.isArray(body.parsed)) {
@@ -73,28 +74,110 @@ export async function POST(request: NextRequest) {
     parsed = body.parsed as Record<string, unknown>;
   }
 
-  // 5. Insert into Supabase
+  // 5. Insert event (Phase 1 unchanged)
   const supabase = getSupabaseServerClient();
-  const { data, error } = await supabase
+  const sourceHost =
+    typeof body.source_host === "string" ? body.source_host : null;
+
+  const { data: inserted, error: insertError } = await supabase
     .from("events")
     .insert({
       source_type: body.source_type as string,
       event_time: eventTime.toISOString(),
       raw_payload: body.raw_payload as string,
-      source_host:
-        typeof body.source_host === "string" ? body.source_host : null,
+      source_host: sourceHost,
       parsed,
     })
     .select("id, received_at, status")
     .single();
 
-  if (error) {
-    console.error("[ingest] supabase insert error:", error);
+  if (insertError) {
+    console.error("[ingest] supabase insert error:", insertError);
     return NextResponse.json(
-      { error: "insert_failed", detail: error.message },
+      { error: "insert_failed", detail: insertError.message },
       { status: 500 }
     );
   }
 
-  return NextResponse.json(data, { status: 201 });
+  // 6. Phase 2: AI scoring
+  // The row is already inserted with default severity='unknown' and mitre_technique='unknown'.
+  // We attempt to score it. If scoring succeeds, we update the row.
+  // If scoring fails, the row stays with default values + ai_provider='failed'.
+  const scoring = await scoreEvent({
+    source_type: body.source_type as string,
+    source_host: sourceHost,
+    raw_payload: body.raw_payload as string,
+    parsed,
+  });
+
+  let finalSeverity = "unknown";
+  let finalTechnique = "unknown";
+  let finalProvider: "groq" | "gemini" | "failed" = "failed";
+  let finalSummary: string | null = null;
+  let finalReasoning: string | null = null;
+
+  if (scoring.ok) {
+    finalSeverity = scoring.verdict.severity;
+    finalTechnique = scoring.verdict.mitre_technique;
+    finalProvider = scoring.provider;
+    finalSummary = scoring.verdict.summary;
+    finalReasoning = scoring.verdict.reasoning;
+  } else {
+    console.warn("[ingest] scoring failed for event", inserted.id, {
+      reason: scoring.reason,
+      provider_attempted: scoring.provider_attempted,
+      latency_ms: scoring.latency_ms,
+    });
+  }
+
+  const { error: updateError } = await supabase
+    .from("events")
+    .update({
+      severity: finalSeverity,
+      mitre_technique: finalTechnique,
+      ai_provider: finalProvider,
+      ai_summary: finalSummary,
+      ai_reasoning: finalReasoning,
+    })
+    .eq("id", inserted.id);
+
+  if (updateError) {
+    // The row exists with default values. We log but don't fail the request.
+    console.error("[ingest] supabase ai-update error (non-fatal):", updateError);
+  }
+
+  // 6.5. Phase 2: Correlation
+  // Call the Postgres correlate_event function. If 3+ events from the same source_ip
+  // are within 15min, they all get stamped with a shared investigation_id.
+  const { data: corr, error: corrError } = await supabase.rpc("correlate_event", {
+    p_event_id: inserted.id,
+  });
+
+  if (corrError) {
+    console.warn("[ingest] correlation rpc error (non-fatal):", corrError);
+  } else if (corr && Array.isArray(corr) && corr[0]) {
+    const investigationId = corr[0].out_investigation_id;
+    const matchCount = corr[0].out_correlated_count;
+    if (investigationId) {
+      console.log("[ingest] correlated event", inserted.id, {
+        investigation_id: investigationId,
+        match_count: matchCount,
+      });
+    } else {
+      console.log("[ingest] no correlation", inserted.id, { match_count: matchCount });
+    }
+  }
+
+  // 7. Return enriched response
+  return NextResponse.json(
+    {
+      id: inserted.id,
+      received_at: inserted.received_at,
+      status: inserted.status,
+      severity: finalSeverity,
+      mitre_technique: finalTechnique,
+      ai_provider: finalProvider,
+    },
+    { status: 201 }
+  );
 }
