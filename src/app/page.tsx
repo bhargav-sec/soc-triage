@@ -216,7 +216,7 @@ export default async function Home() {
                         className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-300 hover:bg-purple-500/20"
                         title={"MITRE ATT&amp;CK: " + (MITRE_NAMES[row.mitre_technique] ?? row.mitre_technique)}
                       >
-                        {row.mitre_technique}
+                        {row.mitre_technique + " · " + (MITRE_NAMES[row.mitre_technique] ?? "")}
                       </a>
                     )}
 
