@@ -125,7 +125,7 @@ See `SESSION-1.md` for shipped details.
 - "Why suspicious" line on each card shows AI reasoning + MITRE technique badge (Phase 1 stub goes away).
 - Events with the same `investigation_id` are visually grouped — exact treatment decided during build.
 - "Next step" line stays as a Phase 3 stub.
-- **AI failure messaging:** when both providers fail (event ingested with `severity = 'unknown'` and `ai_provider = 'failed'`), a non-blocking banner or toast on the page surfaces "AI scoring is currently unavailable — events are being stored but not scored." The banner clears once a successful scoring is observed.
+- **AI scoring status indicator:** the Send sample event button shows live status under the button — "Sending..." → "Scoring with AI..." → "Scored as SEVERITY (provider)" in green, or "AI scoring failed" in red. The indicator clears automatically after a few seconds. Replaces the originally-planned passive banner; provides the same signal at a more visible moment (during the user action).
 
 **6. Developer hygiene.**
 - Server-side `console.log` statements record AI request and response payloads (never the API keys). Visible in `npm run dev` output and Vercel Logs in production.
