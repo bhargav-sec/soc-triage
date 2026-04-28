@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import InvestigationControls from "./InvestigationControls";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -211,16 +212,14 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Next step</h2>
                 <p className="mt-2 text-sm text-zinc-500 italic">AI-recommended actions coming in Phase 3.5.</p>
               </div>
+            </section>
 
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Notes</h2>
-                <p className="mt-2 text-sm text-zinc-500 italic">Notes editor coming in next commit.</p>
-              </div>
-
-              <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Status</h2>
-                <p className="mt-2 text-sm text-zinc-500 italic">Status control coming in next commit.</p>
-              </div>
+            <section className="mt-8">
+              <InvestigationControls
+                investigationId={inv.id}
+                initialStatus={inv.status as "open" | "investigating" | "true_positive" | "false_positive"}
+                initialNotes={inv.notes ?? ""}
+              />
             </section>
 
             <section className="mt-8">
@@ -244,7 +243,7 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                           {row.severity}
                         </span>
                         {row.mitre_technique && row.mitre_technique !== "unknown" && (
-                          <a
+                            <a
                             href={mitreUrl(row.mitre_technique)}
                             target="_blank"
                             rel="noopener noreferrer"
