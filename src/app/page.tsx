@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import SendSampleButton from "./SendSampleButton";
 import RefreshButton from "./RefreshButton";
 import ViewTabs from "./HiddenClosedToggle";
+import SeverityFilter from "./SeverityFilter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -115,7 +116,7 @@ type QueueItem =
   | { kind: "investigation"; row: InvestigationRow; sortAt: string }
   | { kind: "event"; row: EventRow; sortAt: string };
 
-async function getData(view: View): Promise<{
+async function getData(view: View, sevArray: string[]): Promise<{
   items: QueueItem[];
   counts: SeverityCounts;
   totalEvents: number;
@@ -131,20 +132,28 @@ async function getData(view: View): Promise<{
     view === "investigating" ? INVESTIGATING_STATUSES :
     ACTIVE_STATUSES;
 
-  const baseInvQuery = supabase
+  let baseInvQuery = supabase
     .from("investigations")
     .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at")
     .in("status", wantedStatuses)
     .order("updated_at", { ascending: false })
     .limit(200);
 
-  const uncorrEventsQuery = supabase
+  if (sevArray.length > 0) {
+    baseInvQuery = baseInvQuery.in("severity", sevArray);
+  }
+
+  let uncorrEventsQuery = supabase
     .from("events")
     .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status, notes, closed_at")
     .is("investigation_id", null)
     .in("status", wantedStatuses)
     .order("received_at", { ascending: false })
     .limit(200);
+
+  if (sevArray.length > 0) {
+    uncorrEventsQuery = uncorrEventsQuery.in("severity", sevArray);
+  }
 
   const [
     invResult,
@@ -228,13 +237,14 @@ function SeverityCounter({ label, count, colorClass }: { label: string; count: n
   );
 }
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string; sev?: string }> }) {
   const sp = await searchParams;
   const view: View =
     sp.view === "closed" ? "closed" :
     sp.view === "investigating" ? "investigating" :
     "active";
-  const { items, counts, totalEvents, closedCount, activeCount, investigatingCount, error } = await getData(view);
+  const sevArray = sp.sev ? sp.sev.split(",").filter(Boolean) : [];
+  const { items, counts, totalEvents, closedCount, activeCount, investigatingCount, error } = await getData(view, sevArray);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -259,11 +269,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             <SeverityCounter label="medium"   count={counts.medium}   colorClass="bg-yellow-500/10 text-yellow-300 border-yellow-500/30" />
             <SeverityCounter label="low"      count={counts.low}      colorClass="bg-blue-500/10 text-blue-300 border-blue-500/30" />
             <SeverityCounter label="unknown"  count={counts.unknown}  colorClass="bg-zinc-700/30 text-zinc-300 border-zinc-600/40" />
-            <div className="ml-auto">
-              <Suspense fallback={null}>
-                <ViewTabs />
-              </Suspense>
-            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <Suspense fallback={null}>
+              <SeverityFilter />
+            </Suspense>
+            <Suspense fallback={null}>
+              <ViewTabs />
+            </Suspense>
           </div>
         </header>
 
