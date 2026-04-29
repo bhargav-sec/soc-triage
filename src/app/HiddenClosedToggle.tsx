@@ -2,19 +2,23 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-type View = "active" | "closed";
+type View = "active" | "investigating" | "closed";
 
 export default function ViewTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const current: View = searchParams.get("view") === "closed" ? "closed" : "active";
+  const param = searchParams.get("view");
+  const current: View =
+    param === "investigating" ? "investigating" :
+    param === "closed" ? "closed" :
+    "active";
 
   function go(view: View) {
     if (view === current) return;
     if (view === "active") {
       router.push("/");
     } else {
-      router.push("/?view=closed");
+      router.push("/?view=" + view);
     }
   }
 
@@ -30,6 +34,9 @@ export default function ViewTabs() {
     <div className="flex items-center gap-1">
       <button type="button" onClick={() => go("active")} className={tabClass("active")}>
         Active
+      </button>
+      <button type="button" onClick={() => go("investigating")} className={tabClass("investigating")}>
+        Investigating
       </button>
       <button type="button" onClick={() => go("closed")} className={tabClass("closed")}>
         Closed

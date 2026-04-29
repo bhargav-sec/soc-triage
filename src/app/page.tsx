@@ -48,9 +48,10 @@ type SeverityCounts = {
   unknown: number;
 };
 
-type View = "active" | "closed";
+type View = "active" | "investigating" | "closed";
 
-const ACTIVE_STATUSES = ["open", "investigating"];
+const ACTIVE_STATUSES = ["open"];
+const INVESTIGATING_STATUSES = ["investigating"];
 const CLOSED_STATUSES = ["true_positive", "false_positive"];
 
 const MITRE_NAMES: Record<string, string> = {
@@ -120,11 +121,15 @@ async function getData(view: View): Promise<{
   totalEvents: number;
   closedCount: number;
   activeCount: number;
+  investigatingCount: number;
   error: string | null;
 }> {
   const supabase = getSupabaseServerClient();
 
-  const wantedStatuses = view === "closed" ? CLOSED_STATUSES : ACTIVE_STATUSES;
+  const wantedStatuses =
+    view === "closed" ? CLOSED_STATUSES :
+    view === "investigating" ? INVESTIGATING_STATUSES :
+    ACTIVE_STATUSES;
 
   const baseInvQuery = supabase
     .from("investigations")
@@ -141,11 +146,19 @@ async function getData(view: View): Promise<{
     .order("received_at", { ascending: false })
     .limit(200);
 
-  const [invResult, uncorrEventsResult, severityCountsResult, activeCountResult, closedCountResult] = await Promise.all([
+  const [
+    invResult,
+    uncorrEventsResult,
+    severityCountsResult,
+    activeCountResult,
+    investigatingCountResult,
+    closedCountResult,
+  ] = await Promise.all([
     baseInvQuery,
     uncorrEventsQuery,
     supabase.from("events").select("severity"),
     supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", ACTIVE_STATUSES),
+    supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", INVESTIGATING_STATUSES),
     supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", CLOSED_STATUSES),
   ]);
 
@@ -156,6 +169,7 @@ async function getData(view: View): Promise<{
       totalEvents: 0,
       closedCount: 0,
       activeCount: 0,
+      investigatingCount: 0,
       error: invResult.error.message,
     };
   }
@@ -166,6 +180,7 @@ async function getData(view: View): Promise<{
       totalEvents: 0,
       closedCount: 0,
       activeCount: 0,
+      investigatingCount: 0,
       error: uncorrEventsResult.error.message,
     };
   }
@@ -199,6 +214,7 @@ async function getData(view: View): Promise<{
     totalEvents,
     closedCount: closedCountResult.count ?? 0,
     activeCount: activeCountResult.count ?? 0,
+    investigatingCount: investigatingCountResult.count ?? 0,
     error: null,
   };
 }
@@ -214,8 +230,11 @@ function SeverityCounter({ label, count, colorClass }: { label: string; count: n
 
 export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const sp = await searchParams;
-  const view: View = sp.view === "closed" ? "closed" : "active";
-  const { items, counts, totalEvents, closedCount, activeCount, error } = await getData(view);
+  const view: View =
+    sp.view === "closed" ? "closed" :
+    sp.view === "investigating" ? "investigating" :
+    "active";
+  const { items, counts, totalEvents, closedCount, activeCount, investigatingCount, error } = await getData(view);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -225,7 +244,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">SOC Triage</h1>
               <p className="mt-1 text-sm text-zinc-400">
-                Phase 3 · Linux auth ingest · {totalEvents} event{totalEvents === 1 ? "" : "s"} · {activeCount} active · {closedCount} closed
+                Phase 3 · Linux auth ingest · {totalEvents} event{totalEvents === 1 ? "" : "s"} · {activeCount} active · {investigatingCount} investigating · {closedCount} closed
               </p>
             </div>
             <div className="flex gap-2">
@@ -257,7 +276,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         {!error && items.length === 0 && (
           <div className="mt-10 rounded-md border border-zinc-800 bg-zinc-900/40 px-6 py-10 text-center">
             <p className="text-zinc-300">
-              {view === "closed" ? "No closed items." : "Queue is empty."}
+              {view === "closed" ? "No closed items." : view === "investigating" ? "Nothing being investigated." : "Queue is empty."}
             </p>
             {view === "active" && (
               <p className="mt-1 text-sm text-zinc-500">
