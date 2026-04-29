@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import SendSampleButton from "./SendSampleButton";
 import RefreshButton from "./RefreshButton";
-import HiddenClosedToggle from "./HiddenClosedToggle";
+import ViewTabs from "./HiddenClosedToggle";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,6 +45,8 @@ type SeverityCounts = {
   low: number;
   unknown: number;
 };
+
+type View = "active" | "closed";
 
 const MITRE_NAMES: Record<string, string> = {
   "T1110.001": "Password Guessing",
@@ -112,29 +114,43 @@ type QueueItem =
   | { kind: "investigation"; row: InvestigationRow; sortAt: string }
   | { kind: "event"; row: EventRow; sortAt: string };
 
-async function getData(showClosed: boolean): Promise<{
+async function getData(view: View): Promise<{
   items: QueueItem[];
   counts: SeverityCounts;
   totalEvents: number;
-  hiddenClosedCount: number;
+  closedCount: number;
+  activeCount: number;
   error: string | null;
 }> {
   const supabase = getSupabaseServerClient();
 
-  const [invResult, uncorrEventsResult, severityCountsResult, closedCountResult] = await Promise.all([
-    supabase
-      .from("investigations")
-      .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at")
-      .order("updated_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("events")
-      .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status")
-      .is("investigation_id", null)
-      .order("received_at", { ascending: false })
-      .limit(200),
+  const ACTIVE_STATUSES = ["open", "investigating"];
+  const CLOSED_STATUSES = ["true_positive", "false_positive"];
+
+  const wantedStatuses = view === "closed" ? CLOSED_STATUSES : ACTIVE_STATUSES;
+
+  const baseInvQuery = supabase
+    .from("investigations")
+    .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at")
+    .in("status", wantedStatuses)
+    .order("updated_at", { ascending: false })
+    .limit(200);
+
+  const uncorrEventsQuery = view === "active"
+    ? supabase
+        .from("events")
+        .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status")
+        .is("investigation_id", null)
+        .order("received_at", { ascending: false })
+        .limit(200)
+    : Promise.resolve({ data: [], error: null });
+
+  const [invResult, uncorrEventsResult, severityCountsResult, activeCountResult, closedCountResult] = await Promise.all([
+    baseInvQuery,
+    uncorrEventsQuery,
     supabase.from("events").select("severity"),
-    supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", ["true_positive", "false_positive"]),
+    supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", ACTIVE_STATUSES),
+    supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", CLOSED_STATUSES),
   ]);
 
   if (invResult.error) {
@@ -142,7 +158,8 @@ async function getData(showClosed: boolean): Promise<{
       items: [],
       counts: { critical: 0, high: 0, medium: 0, low: 0, unknown: 0 },
       totalEvents: 0,
-      hiddenClosedCount: 0,
+      closedCount: 0,
+      activeCount: 0,
       error: invResult.error.message,
     };
   }
@@ -151,7 +168,8 @@ async function getData(showClosed: boolean): Promise<{
       items: [],
       counts: { critical: 0, high: 0, medium: 0, low: 0, unknown: 0 },
       totalEvents: 0,
-      hiddenClosedCount: 0,
+      closedCount: 0,
+      activeCount: 0,
       error: uncorrEventsResult.error.message,
     };
   }
@@ -170,21 +188,22 @@ async function getData(showClosed: boolean): Promise<{
     }
   }
 
-  const hiddenClosedCount = closedCountResult.count ?? 0;
-
   const investigations = (invResult.data ?? []) as InvestigationRow[];
-  const visibleInvestigations = showClosed
-    ? investigations
-    : investigations.filter((i) => i.status === "open" || i.status === "investigating");
-
   const items: QueueItem[] = [
-    ...visibleInvestigations.map((row): QueueItem => ({ kind: "investigation", row, sortAt: row.updated_at })),
+    ...investigations.map((row): QueueItem => ({ kind: "investigation", row, sortAt: row.updated_at })),
     ...((uncorrEventsResult.data ?? []) as EventRow[]).map((row): QueueItem => ({ kind: "event", row, sortAt: row.received_at })),
   ];
 
   items.sort((a, b) => (a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0));
 
-  return { items, counts, totalEvents, hiddenClosedCount, error: null };
+  return {
+    items,
+    counts,
+    totalEvents,
+    closedCount: closedCountResult.count ?? 0,
+    activeCount: activeCountResult.count ?? 0,
+    error: null,
+  };
 }
 
 function SeverityCounter({ label, count, colorClass }: { label: string; count: number; colorClass: string }) {
@@ -196,10 +215,10 @@ function SeverityCounter({ label, count, colorClass }: { label: string; count: n
   );
 }
 
-export default async function Home({ searchParams }: { searchParams: Promise<{ closed?: string }> }) {
+export default async function Home({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
   const sp = await searchParams;
-  const showClosed = sp.closed === "1";
-  const { items, counts, totalEvents, hiddenClosedCount, error } = await getData(showClosed);
+  const view: View = sp.view === "closed" ? "closed" : "active";
+  const { items, counts, totalEvents, closedCount, activeCount, error } = await getData(view);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -209,7 +228,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">SOC Triage</h1>
               <p className="mt-1 text-sm text-zinc-400">
-                Phase 3 · Linux auth ingest · {totalEvents} event{totalEvents === 1 ? "" : "s"} · {items.length} item{items.length === 1 ? "" : "s"} in queue
+                Phase 3 · Linux auth ingest · {totalEvents} event{totalEvents === 1 ? "" : "s"} · {activeCount} active · {closedCount} closed
               </p>
             </div>
             <div className="flex gap-2">
@@ -224,14 +243,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
             <SeverityCounter label="medium"   count={counts.medium}   colorClass="bg-yellow-500/10 text-yellow-300 border-yellow-500/30" />
             <SeverityCounter label="low"      count={counts.low}      colorClass="bg-blue-500/10 text-blue-300 border-blue-500/30" />
             <SeverityCounter label="unknown"  count={counts.unknown}  colorClass="bg-zinc-700/30 text-zinc-300 border-zinc-600/40" />
-            <div className="ml-auto flex items-center gap-2">
-              {hiddenClosedCount > 0 && !showClosed && (
-                <span className="text-xs text-zinc-500">
-                  {hiddenClosedCount} closed hidden
-                </span>
-              )}
+            <div className="ml-auto">
               <Suspense fallback={null}>
-                <HiddenClosedToggle />
+                <ViewTabs />
               </Suspense>
             </div>
           </div>
@@ -245,10 +259,14 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ c
 
         {!error && items.length === 0 && (
           <div className="mt-10 rounded-md border border-zinc-800 bg-zinc-900/40 px-6 py-10 text-center">
-            <p className="text-zinc-300">Queue is empty.</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Click <span className="text-zinc-300">Send sample event</span> to ingest one.
+            <p className="text-zinc-300">
+              {view === "closed" ? "No closed investigations." : "Queue is empty."}
             </p>
+            {view === "active" && (
+              <p className="mt-1 text-sm text-zinc-500">
+                Click <span className="text-zinc-300">Send sample event</span> to ingest one.
+              </p>
+            )}
           </div>
         )}
 

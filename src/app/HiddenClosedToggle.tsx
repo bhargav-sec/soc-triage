@@ -2,29 +2,38 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function HiddenClosedToggle() {
+type View = "active" | "closed";
+
+export default function ViewTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const showClosed = searchParams.get("closed") === "1";
+  const current: View = searchParams.get("view") === "closed" ? "closed" : "active";
 
-  function handleClick() {
-    const params = new URLSearchParams(searchParams.toString());
-    if (showClosed) {
-      params.delete("closed");
+  function go(view: View) {
+    if (view === current) return;
+    if (view === "active") {
+      router.push("/");
     } else {
-      params.set("closed", "1");
+      router.push("/?view=closed");
     }
-    const qs = params.toString();
-    router.push(qs ? "/?" + qs : "/");
+  }
+
+  function tabClass(view: View): string {
+    const isActive = view === current;
+    if (isActive) {
+      return "rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100";
+    }
+    return "rounded border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200";
   }
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="rounded border border-zinc-700 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
-    >
-      {showClosed ? "Hide closed" : "Show closed"}
-    </button>
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={() => go("active")} className={tabClass("active")}>
+        Active
+      </button>
+      <button type="button" onClick={() => go("closed")} className={tabClass("closed")}>
+        Closed
+      </button>
+    </div>
   );
 }
