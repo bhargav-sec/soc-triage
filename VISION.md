@@ -3,8 +3,8 @@
 **Project:** SOC Triage Platform (working name)
 **Author:** Bhargav
 **Created:** 2026-04-27
-**Last updated:** 2026-04-27 (Phase 2 scope locked)
-**Status:** v1 scope, Phase 2 in progress
+**Last updated:** 2026-04-29 (Phase 3 shipped)
+**Status:** v1 scope, Phase 3 shipped, Phase 3.5 next
 
 ---
 
@@ -172,10 +172,26 @@ No data migration needed. Both default to safe values for existing rows.
 
 ---
 
-## Phases 3 and 4 (future sessions, directional only)
+## Phase 3 (shipped 2026-04-29)
 
-- **Phase 3:** Scaffolded triage playbooks (`Next step` content), AI-recommended remediation actions and L2 escalation criteria, analyst notes, investigation close flow, dedicated `investigations` table, severity rescore + manual analyst override of AI verdicts, optional auth.
-- **Phase 4:** Per-host endpoint timeline view. Python forwarder agent that tails `/var/log/auth.log` and POSTs to `/api/ingest`. Honeypot VM (Oracle Cloud free tier or cheap droplet) as a live data source.
+Goal: close the workflow loop. An analyst can now open an investigation or single event, work it, and close it.
+
+Shipped:
+* Dedicated `investigations` table with status / severity / mitre / source_ip / event_count / notes / closed_at
+* Investigation detail page at `/investigations/[id]` with notes, status control, correlated events list
+* Event detail page at `/events/[id]` with notes, status control, raw payload (added mid-session, swapped in for bulk upload)
+* Four-status enum on both events and investigations: `open` / `investigating` / `true_positive` / `false_positive`
+* Three-tab home queue: Active / Investigating / Closed
+* `correlate_event` rewritten to insert into `investigations` instead of stamping a free-floating UUID; existing data backfilled
+* Auto-save on notes (blur-driven), close-requires-note enforced server-side
+* `false_positive` status as the AI-disagreement escape hatch (instead of building override mid-phase)
+
+See `SESSION-3.md` for shipped details.
+
+## Phases 3.5 and 4 (future sessions, directional only)
+
+* **Phase 3.5:** Bulk log file upload (deferred from Phase 3), AI-recommended remediation actions and L2 escalation criteria, AI verdict override on severity / MITRE (paired with rescore button), severity filtering on home queue.
+* **Phase 4:** Per-host endpoint timeline view. Python forwarder agent that tails `/var/log/auth.log` and POSTs to `/api/ingest`. Honeypot VM (Oracle Cloud free tier or cheap droplet) as a live data source.
 
 These phases are directional, not contractual. Each one gets re-scoped at the start of its session.
 
@@ -183,23 +199,25 @@ These phases are directional, not contractual. Each one gets re-scoped at the st
 
 ## Decisions deferred (revisit later)
 
-- **AI verdict accuracy / dispute detection** — Phase 3 candidate. Three approaches considered: analyst override flow (most realistic, leverages Phase 3 work), cross-provider agreement check (Groq + Gemini in parallel, flag disagreements), hardcoded heuristic guardrails (rule-based sanity checks on top of AI verdicts). To be re-evaluated when Phase 3 scope is locked.
-- **AI-recommended remediation steps and L2 escalation criteria** — Phase 3 (part of playbooks).
-- **"What's normal here?" baseline panel** — Phase 3 candidate.
-- **Auth (Supabase Auth)** — Phase 3 candidate.
-- **Rescoring failed events** — Phase 3 candidate.
-- **Analyst manual override of AI severity / MITRE technique** — Phase 3.
-- **Cross-IP same-user correlation** — Phase 3 candidate.
-- **Investigations table separate from events** — Phase 3.
-- **`severity_score` numeric column population** — Phase 3+.
-- **Per-host endpoint timeline** — Phase 4.
-- **Python forwarder agent + honeypot VM** — Phase 4.
-- **Real-time updates (websockets / Supabase Realtime)** — out of scope through Phase 4.
-- **Custom domain and product name** — when there's something worth branding.
-- **Honeypot VM provider (Oracle Cloud free vs. cheap droplet)** — Phase 4.
-- **Filtering / sorting / bulk actions on the queue** — Phase 3 candidate.
-- **MITRE Navigator-style coverage view** — out of scope for v1.
-- **Optional `/stats` (dashboard) page** — Phase 3 candidate. Charts and aggregated views (events over time, top source IPs, MITRE technique distribution, severity breakdown) for users who want traditional SIEM-style visualization. Lives on a separate route — never the home page. Home page stays the triage queue. Adds to Phase 3 if time allows; not core scope.
+* **Bulk log file upload** — Phase 3.5. Was originally Phase 3 commit 6, swapped mid-session for event-level close flow.
+* **AI-recommended remediation actions / "Next step" content** — Phase 3.5. Per-MITRE-technique prompts. Render as checklist on detail pages.
+* **L2 escalation criteria** — Phase 3.5 (paired with remediation actions).
+* **AI verdict override on severity / MITRE** — Phase 3.5. Original AI verdict preserved in `ai_severity_original` / `ai_mitre_original` for accuracy tracking.
+* **Rescore failed events** — Phase 3.5. Pairs with override.
+* **Severity filtering on home queue** — Phase 3.5 candidate. User asked for it mid-Phase-3, deferred. Open question: fourth tab vs. click-to-filter on counters vs. separate filter bar.
+* **Cross-provider verdict agreement / dispute detection** — Phase 3.5+ candidate. Currently blocked on Gemini free-tier exhaustion; would need a provider swap (Claude Haiku, OpenAI, Cerebras).
+* **"What's normal here?" baseline panel** — Phase 3.5 candidate.
+* **Auth (Supabase Auth)** — deferred indefinitely. Was optional in Phase 3, declined. Re-evaluate when single-user model becomes a real limitation.
+* **Cross-IP same-user correlation** — Phase 3.5+ candidate.
+* **`severity_score` numeric column population** — Phase 3.5+.
+* **Per-host endpoint timeline** — Phase 4.
+* **Python forwarder agent + honeypot VM** — Phase 4.
+* **Real-time updates (websockets / Supabase Realtime)** — out of scope through Phase 4.
+* **Custom domain and product name** — when there's something worth branding.
+* **Honeypot VM provider (Oracle Cloud free vs. cheap droplet)** — Phase 4.
+* **Filtering / sorting / bulk actions on the queue** — Phase 3.5 candidate (severity filter is the first piece).
+* **MITRE Navigator-style coverage view** — out of scope for v1.
+* **Optional `/stats` (dashboard) page** — Phase 3.5+ candidate. Charts and aggregated views for users who want traditional SIEM-style visualization. Lives on a separate route — never the home page.
 
 ---
 
