@@ -23,6 +23,8 @@ type EventRow = {
   ai_reasoning: string | null;
   investigation_id: string | null;
   status: string;
+  notes: string | null;
+  closed_at: string | null;
 };
 
 type InvestigationRow = {
@@ -48,6 +50,9 @@ type SeverityCounts = {
 
 type View = "active" | "closed";
 
+const ACTIVE_STATUSES = ["open", "investigating"];
+const CLOSED_STATUSES = ["true_positive", "false_positive"];
+
 const MITRE_NAMES: Record<string, string> = {
   "T1110.001": "Password Guessing",
   "T1110.003": "Password Spraying",
@@ -57,11 +62,6 @@ const MITRE_NAMES: Record<string, string> = {
   "T1098": "Account Manipulation",
   "unknown": "Unknown",
 };
-
-function mitreUrl(technique: string): string {
-  const slug = technique.replace(".", "/");
-  return "https://attack.mitre.org/techniques/" + slug + "/";
-}
 
 function summarize(row: EventRow): string {
   if (row.ai_summary) return row.ai_summary;
@@ -124,9 +124,6 @@ async function getData(view: View): Promise<{
 }> {
   const supabase = getSupabaseServerClient();
 
-  const ACTIVE_STATUSES = ["open", "investigating"];
-  const CLOSED_STATUSES = ["true_positive", "false_positive"];
-
   const wantedStatuses = view === "closed" ? CLOSED_STATUSES : ACTIVE_STATUSES;
 
   const baseInvQuery = supabase
@@ -136,14 +133,13 @@ async function getData(view: View): Promise<{
     .order("updated_at", { ascending: false })
     .limit(200);
 
-  const uncorrEventsQuery = view === "active"
-    ? supabase
-        .from("events")
-        .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status")
-        .is("investigation_id", null)
-        .order("received_at", { ascending: false })
-        .limit(200)
-    : Promise.resolve({ data: [], error: null });
+  const uncorrEventsQuery = supabase
+    .from("events")
+    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status, notes, closed_at")
+    .is("investigation_id", null)
+    .in("status", wantedStatuses)
+    .order("received_at", { ascending: false })
+    .limit(200);
 
   const [invResult, uncorrEventsResult, severityCountsResult, activeCountResult, closedCountResult] = await Promise.all([
     baseInvQuery,
@@ -189,9 +185,10 @@ async function getData(view: View): Promise<{
   }
 
   const investigations = (invResult.data ?? []) as InvestigationRow[];
+  const events = (uncorrEventsResult.data ?? []) as EventRow[];
   const items: QueueItem[] = [
     ...investigations.map((row): QueueItem => ({ kind: "investigation", row, sortAt: row.updated_at })),
-    ...((uncorrEventsResult.data ?? []) as EventRow[]).map((row): QueueItem => ({ kind: "event", row, sortAt: row.received_at })),
+    ...events.map((row): QueueItem => ({ kind: "event", row, sortAt: row.received_at })),
   ];
 
   items.sort((a, b) => (a.sortAt < b.sortAt ? 1 : a.sortAt > b.sortAt ? -1 : 0));
@@ -260,7 +257,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         {!error && items.length === 0 && (
           <div className="mt-10 rounded-md border border-zinc-800 bg-zinc-900/40 px-6 py-10 text-center">
             <p className="text-zinc-300">
-              {view === "closed" ? "No closed investigations." : "Queue is empty."}
+              {view === "closed" ? "No closed items." : "Queue is empty."}
             </p>
             {view === "active" && (
               <p className="mt-1 text-sm text-zinc-500">
@@ -318,64 +315,54 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
 
               const row = item.row;
               return (
-                <li
-                  key={"evt-" + row.id}
-                  className="rounded-md border border-zinc-800 bg-zinc-900/40 p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + severityBadgeClass(row.severity)}>
-                      {row.severity}
-                    </span>
-                    {row.mitre_technique && row.mitre_technique !== "unknown" && (
-                      <a
-                        href={mitreUrl(row.mitre_technique)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-300 hover:bg-purple-500/20"
-                      >
-                        {row.mitre_technique + " · " + (MITRE_NAMES[row.mitre_technique] ?? "")}
-                      </a>
-                    )}
-                    <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-zinc-300">
-                      {row.source_type}
-                    </span>
-                    {row.source_host && (
-                      <span className="text-zinc-400">
-                        host: <span className="text-zinc-200">{row.source_host}</span>
+                <li key={"evt-" + row.id}>
+                  <Link
+                    href={"/events/" + row.id}
+                    className="block rounded-md border border-zinc-800 bg-zinc-900/40 p-4 transition hover:border-zinc-600 hover:bg-zinc-900/70"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 font-mono text-zinc-400">
+                        EVT-{shortId(row.id)}
                       </span>
-                    )}
-                    <span className="ml-auto text-zinc-500">
-                      {new Date(row.event_time).toISOString()}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 space-y-2 text-sm">
-                    <div>
-                      <span className="text-zinc-500">Observed:</span>{" "}
-                      <span className="text-zinc-100">{summarize(row)}</span>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500">Why suspicious:</span>{" "}
-                      {row.ai_reasoning ? (
-                        <span className="text-zinc-100">{row.ai_reasoning}</span>
-                      ) : (
-                        <span className="text-zinc-500 italic">not yet scored</span>
+                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + statusBadgeClass(row.status)}>
+                        {row.status.replace("_", " ")}
+                      </span>
+                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + severityBadgeClass(row.severity)}>
+                        {row.severity}
+                      </span>
+                      {row.mitre_technique && row.mitre_technique !== "unknown" && (
+                        <span className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-300">
+                          {row.mitre_technique + " · " + (MITRE_NAMES[row.mitre_technique] ?? "")}
+                        </span>
                       )}
+                      <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-zinc-300">
+                        {row.source_type}
+                      </span>
+                      {row.source_host && (
+                        <span className="text-zinc-400">
+                          host: <span className="text-zinc-200">{row.source_host}</span>
+                        </span>
+                      )}
+                      <span className="ml-auto text-zinc-500">
+                        {new Date(row.event_time).toISOString()}
+                      </span>
                     </div>
-                    <div>
-                      <span className="text-zinc-500">Next step:</span>{" "}
-                      <span className="text-zinc-500 italic">not correlated · single event</span>
-                    </div>
-                  </div>
 
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
-                      Raw payload
-                    </summary>
-                    <pre className="mt-2 overflow-x-auto rounded bg-black/40 p-3 text-xs text-zinc-300">
-                      {row.raw_payload}
-                    </pre>
-                  </details>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div>
+                        <span className="text-zinc-500">Observed:</span>{" "}
+                        <span className="text-zinc-100">{summarize(row)}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Why suspicious:</span>{" "}
+                        {row.ai_reasoning ? (
+                          <span className="text-zinc-100">{row.ai_reasoning}</span>
+                        ) : (
+                          <span className="text-zinc-500 italic">not yet scored</span>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
                 </li>
               );
             })}
