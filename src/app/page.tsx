@@ -259,6 +259,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             </div>
             <div className="flex gap-2">
               <SendSampleButton />
+              <Link href="/upload" className="rounded-md border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">Upload logs</Link>
               <RefreshButton />
             </div>
           </div>
