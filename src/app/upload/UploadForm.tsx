@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 
-type Status = "idle" | "uploading" | "done";
+type Status = "idle" | "uploading" | "done" | "cancelled";
 
 export default function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
@@ -12,6 +12,7 @@ export default function UploadForm() {
   const [total, setTotal] = useState(0);
   const [successCount, setSuccessCount] = useState(0);
   const [failureCount, setFailureCount] = useState(0);
+  const [lastError, setLastError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
 
   async function handleUpload() {
@@ -21,18 +22,25 @@ export default function UploadForm() {
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !l.startsWith("#"));
-    if (lines.length === 0) return;
+
     cancelledRef.current = false;
     setStatus("uploading");
     setTotal(lines.length);
     setCurrent(0);
     setSuccessCount(0);
     setFailureCount(0);
+    setLastError(null);
+
     let success = 0;
     let failure = 0;
+
     for (let i = 0; i < lines.length; i++) {
-      if (cancelledRef.current) break;
+      if (cancelledRef.current) {
+        setStatus("cancelled");
+        return;
+      }
       setCurrent(i + 1);
+
       try {
         const res = await fetch("/api/ingest", {
           method: "POST",
@@ -41,11 +49,27 @@ export default function UploadForm() {
             raw_payload: lines[i],
             source_type: "linux_auth",
             source_host: "uploaded",
+            event_time: new Date().toISOString(),
           }),
         });
-        if (res.ok) { success++; } else { failure++; }
-      } catch {
+        if (res.ok) {
+          success++;
+        } else {
+          failure++;
+          if (!lastError) {
+            try {
+              const errBody = await res.json();
+              setLastError("HTTP " + res.status + ": " + JSON.stringify(errBody));
+            } catch {
+              setLastError("HTTP " + res.status + " (no body)");
+            }
+          }
+        }
+      } catch (err) {
         failure++;
+        if (!lastError) {
+          setLastError("Fetch error: " + (err instanceof Error ? err.message : String(err)));
+        }
       }
       setSuccessCount(success);
       setFailureCount(failure);
@@ -53,117 +77,124 @@ export default function UploadForm() {
         await new Promise((r) => setTimeout(r, 600));
       }
     }
+
     setStatus("done");
   }
 
-  function handleCancel() { cancelledRef.current = true; }
+  function handleCancel() {
+    cancelledRef.current = true;
+  }
 
-  function handleReset() {
+  function reset() {
     setFile(null);
     setStatus("idle");
     setCurrent(0);
     setTotal(0);
     setSuccessCount(0);
     setFailureCount(0);
+    setLastError(null);
     cancelledRef.current = false;
   }
 
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
-
   return (
-    <div>
-      <div className="mb-6">
-        <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200 transition">
-          Back to queue
+    <div className="space-y-6">
+      <div>
+        <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
+          &larr; Back to queue
         </Link>
       </div>
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Bulk Log Upload</h1>
-      <p className="text-sm text-zinc-400 mb-8">
-        Upload a .log or .txt file. Each line is ingested as a separate event with AI scoring.
-        Lines starting with # are skipped.
-      </p>
+
+      <header className="border-b border-zinc-800 pb-6">
+        <h1 className="text-2xl font-semibold tracking-tight">Bulk Log Upload</h1>
+        <p className="mt-1 text-sm text-zinc-400">
+          Upload a .log or .txt file. Each line is ingested as a separate event with AI scoring. Lines starting with # are skipped.
+        </p>
+      </header>
 
       {status === "idle" && (
-        <div className="space-y-5">
-          <div>
-            <label htmlFor="logfile" className="block text-sm text-zinc-400 mb-2">
-              Select file
-            </label>
-            <input
-              id="logfile"
-              type="file"
-              accept=".log,.txt"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-zinc-700 file:bg-zinc-800 file:text-zinc-200 file:text-sm file:cursor-pointer hover:file:bg-zinc-700 file:transition cursor-pointer"
-            />
-            {file && (
-              <p className="mt-2 text-xs text-zinc-500">
-                {file.name} · {(file.size / 1024).toFixed(1)} KB
-              </p>
-            )}
-          </div>
+        <div className="space-y-4">
+          <input
+            type="file"
+            accept=".log,.txt,text/plain"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="block w-full text-sm text-zinc-300 file:mr-4 file:rounded-md file:border file:border-zinc-700 file:bg-zinc-900 file:px-3 file:py-1.5 file:text-zinc-200 file:hover:bg-zinc-800"
+          />
+          {file && (
+            <div className="text-xs text-zinc-500">
+              Selected: <span className="text-zinc-300">{file.name}</span> ({Math.round(file.size / 1024)} KB)
+            </div>
+          )}
           <button
-            onClick={handleUpload}
+            type="button"
             disabled={!file}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            onClick={handleUpload}
+            className="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-100 hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Upload and Ingest
+            Upload
           </button>
         </div>
       )}
 
       {status === "uploading" && (
-        <div className="space-y-5">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-zinc-300">Processing line {current} of {total}</span>
-              <span className="text-sm text-zinc-500">{pct}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: pct + "%" }} />
-            </div>
+        <div className="space-y-3">
+          <div className="text-sm text-zinc-300">
+            Processing line {current} of {total}...
           </div>
-          <div className="flex gap-4 text-sm">
-            <span className="text-emerald-400">{successCount} ingested</span>
-            <span className="text-red-400">{failureCount} failed</span>
+          <div className="h-2 w-full overflow-hidden rounded bg-zinc-900">
+            <div
+              className="h-full bg-emerald-500/60 transition-all"
+              style={{ width: total > 0 ? (current / total) * 100 + "%" : "0%" }}
+            />
           </div>
+          <div className="text-xs text-zinc-500">
+            {successCount} ingested · {failureCount} failed
+          </div>
+          {lastError && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              First error: {lastError}
+            </div>
+          )}
           <button
+            type="button"
             onClick={handleCancel}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition"
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/20"
           >
             Cancel
           </button>
         </div>
       )}
 
-      {status === "done" && (
-        <div className="space-y-5">
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/50 px-5 py-4 space-y-2">
-            <p className="text-sm font-medium text-zinc-200">Upload complete</p>
-            <p className="text-sm text-zinc-400">
-              {current} of {total} lines processed
-              {cancelledRef.current && (
-                <span className="ml-2 text-amber-400">(cancelled early)</span>
-              )}
-            </p>
-            <div className="flex gap-4 text-sm pt-1">
-              <span className="text-emerald-400">{successCount} ingested</span>
-              <span className="text-red-400">{failureCount} failed</span>
-            </div>
+      {(status === "done" || status === "cancelled") && (
+        <div className="space-y-3">
+          <div className="text-sm text-zinc-300">
+            {status === "done" ? "Upload complete" : "Upload cancelled"}
           </div>
-          <div className="flex gap-3">
-            <Link
-              href="/"
-              className="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition"
-            >
-              View queue
-            </Link>
+          <div className="text-xs text-zinc-500">
+            {current} of {total} lines processed
+          </div>
+          <div className="text-xs text-zinc-400">
+            <span className="text-emerald-300">{successCount} ingested</span> ·{" "}
+            <span className="text-red-300">{failureCount} failed</span>
+          </div>
+          {lastError && (
+            <div className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
+              First error: {lastError}
+            </div>
+          )}
+          <div className="flex gap-2">
             <button
-              onClick={handleReset}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition"
+              type="button"
+              onClick={reset}
+              className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
             >
               Upload another file
             </button>
+            <Link
+              href="/"
+              className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+            >
+              Back to queue
+            </Link>
           </div>
         </div>
       )}
