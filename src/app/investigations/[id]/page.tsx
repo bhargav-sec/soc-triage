@@ -18,6 +18,8 @@ type InvestigationRow = {
   notes: string | null;
   closed_at: string | null;
   recommended_actions: string[] | null;
+  ai_severity_original: string | null;
+  ai_mitre_original: string | null;
 };
 
 type EventRow = {
@@ -109,7 +111,7 @@ async function getInvestigation(id: string): Promise<{
 
   const invResult = await supabase
     .from("investigations")
-    .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at, recommended_actions")
+    .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at, recommended_actions, ai_severity_original, ai_mitre_original")
     .eq("id", id)
     .maybeSingle();
 
@@ -148,7 +150,6 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
 
   const topReasoning = events.find((e) => e.ai_reasoning)?.ai_reasoning ?? null;
 
-  // Merge recommended_actions: inv-level first, fall back to first event that has them
   const actions: string[] =
     (inv?.recommended_actions && inv.recommended_actions.length > 0)
       ? inv.recommended_actions
@@ -244,6 +245,10 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                 investigationId={inv.id}
                 initialStatus={inv.status as "open" | "investigating" | "true_positive" | "false_positive"}
                 initialNotes={inv.notes ?? ""}
+                initialSeverity={inv.severity ?? "unknown"}
+                initialMitre={inv.mitre_technique ?? "unknown"}
+                aiSeverityOriginal={inv.ai_severity_original}
+                aiMitreOriginal={inv.ai_mitre_original}
               />
             </section>
 

@@ -19,6 +19,8 @@ type EventRow = {
   ai_provider: string | null;
   ai_summary: string | null;
   ai_reasoning: string | null;
+  ai_severity_original: string | null;
+  ai_mitre_original: string | null;
   recommended_actions: string[] | null;
   investigation_id: string | null;
   status: string;
@@ -82,7 +84,7 @@ async function getEvent(id: string): Promise<{ event: EventRow | null; error: st
   const supabase = getSupabaseServerClient();
   const result = await supabase
     .from("events")
-    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, recommended_actions, investigation_id, status, notes, closed_at")
+    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, ai_severity_original, ai_mitre_original, recommended_actions, investigation_id, status, notes, closed_at")
     .eq("id", id)
     .maybeSingle();
   if (result.error) {
@@ -202,6 +204,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 eventId={event.id}
                 initialStatus={event.status as "open" | "investigating" | "true_positive" | "false_positive"}
                 initialNotes={event.notes ?? ""}
+                initialSeverity={event.severity ?? "unknown"}
+                initialMitre={event.mitre_technique ?? "unknown"}
+                aiSeverityOriginal={event.ai_severity_original}
+                aiMitreOriginal={event.ai_mitre_original}
               />
             </section>
 
