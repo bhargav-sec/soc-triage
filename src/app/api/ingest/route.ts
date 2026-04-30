@@ -7,7 +7,8 @@ import { scoreEvent } from "@/lib/ai-scorer";
  *
  * Phase 1: validate body, insert into events table.
  * Phase 2: after insert, score with AI and update the row with severity,
- *          mitre_technique, ai_summary, ai_reasoning, ai_provider.
+ *          mitre_technique, ai_summary, ai_reasoning, ai_provider,
+ *          recommended_actions, last_scored_at.
  *          Always returns 201 on successful insert, even if AI scoring fails.
  *
  * Required body fields:
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
     parsed = body.parsed as Record<string, unknown>;
   }
 
-  // 5. Insert event (Phase 1 unchanged)
+  // 5. Insert event
   const supabase = getSupabaseServerClient();
   const sourceHost =
     typeof body.source_host === "string" ? body.source_host : null;
@@ -99,10 +100,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 6. Phase 2: AI scoring
-  // The row is already inserted with default severity='unknown' and mitre_technique='unknown'.
-  // We attempt to score it. If scoring succeeds, we update the row.
-  // If scoring fails, the row stays with default values + ai_provider='failed'.
+  // 6. AI scoring
   const scoring = await scoreEvent({
     source_type: body.source_type as string,
     source_host: sourceHost,
@@ -115,6 +113,7 @@ export async function POST(request: NextRequest) {
   let finalProvider: "groq" | "gemini" | "failed" = "failed";
   let finalSummary: string | null = null;
   let finalReasoning: string | null = null;
+  let finalActions: string[] = [];
 
   if (scoring.ok) {
     finalSeverity = scoring.verdict.severity;
@@ -122,6 +121,7 @@ export async function POST(request: NextRequest) {
     finalProvider = scoring.provider;
     finalSummary = scoring.verdict.summary;
     finalReasoning = scoring.verdict.reasoning;
+    finalActions = scoring.verdict.recommended_actions;
   } else {
     console.warn("[ingest] scoring failed for event", inserted.id, {
       reason: scoring.reason,
@@ -138,17 +138,16 @@ export async function POST(request: NextRequest) {
       ai_provider: finalProvider,
       ai_summary: finalSummary,
       ai_reasoning: finalReasoning,
+      recommended_actions: finalActions,
+      last_scored_at: new Date().toISOString(),
     })
     .eq("id", inserted.id);
 
   if (updateError) {
-    // The row exists with default values. We log but don't fail the request.
     console.error("[ingest] supabase ai-update error (non-fatal):", updateError);
   }
 
-  // 6.5. Phase 2: Correlation
-  // Call the Postgres correlate_event function. If 3+ events from the same source_ip
-  // are within 15min, they all get stamped with a shared investigation_id.
+  // 6.5. Correlation
   const { data: corr, error: corrError } = await supabase.rpc("correlate_event", {
     p_event_id: inserted.id,
   });

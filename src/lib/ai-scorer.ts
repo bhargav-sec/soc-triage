@@ -29,7 +29,8 @@ Required shape:
   "severity": "critical" | "high" | "medium" | "low",
   "mitre_technique": "T1110.001" | "T1110.003" | "T1078" | "T1548.003" | "T1136" | "T1098" | "unknown",
   "summary": "one plain English sentence describing what was observed",
-  "reasoning": "one or two plain English sentences explaining why this severity and this technique"
+  "reasoning": "one or two plain English sentences explaining why this severity and this technique",
+  "recommended_actions": ["action 1", "action 2", "action 3"]
 }
 
 Severity guide:
@@ -46,6 +47,12 @@ MITRE technique guide:
   - T1136 Create Account: new user account creation
   - T1098 Account Manipulation: group changes, permission grants, password changes
   - unknown: pick this only if none of the above clearly apply
+
+recommended_actions guide:
+  - Return 2 to 4 concise, actionable steps a SOC analyst should take for this specific event
+  - Examples: "Block source IP 1.2.3.4 at the firewall", "Reset password for user root", "Review sudo logs for user deploy", "Escalate to incident response team"
+  - Be specific to the event — not generic advice
+  - Use plain English imperatives (start with a verb)
 
 Be precise. Use real terminology. Do not soften.`;
 
@@ -145,7 +152,6 @@ async function tryGroq(
 async function tryFallback(
   _input: ScoreInput
 ): Promise<{ ok: true; verdict: import("./ai-types").AiVerdict; latency_ms: number; provider: "gemini" } | null> {
-  // Future provider goes here. Returning null means "no fallback configured".
   return null;
 }
 

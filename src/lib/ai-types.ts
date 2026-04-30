@@ -41,6 +41,7 @@ export type AiVerdict = {
   mitre_technique: MitreTechnique;
   summary: string;
   reasoning: string;
+  recommended_actions: string[];
 };
 
 /**
@@ -90,6 +91,14 @@ export function validateVerdict(
     return { ok: false, reason: "reasoning missing or empty" };
   }
 
+  const actions = v.recommended_actions;
+  if (
+    !Array.isArray(actions) ||
+    !actions.every((a) => typeof a === "string")
+  ) {
+    return { ok: false, reason: "recommended_actions missing or not a string array" };
+  }
+
   return {
     ok: true,
     verdict: {
@@ -97,6 +106,7 @@ export function validateVerdict(
       mitre_technique: v.mitre_technique as MitreTechnique,
       summary: v.summary,
       reasoning: v.reasoning,
+      recommended_actions: actions,
     },
   };
 }
