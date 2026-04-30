@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import EventControls from "./EventControls";
+import RescoreButton from "./RescoreButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -156,7 +157,6 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   </Link>
                 )}
               </div>
-
               <div className="mt-3 text-xs text-zinc-500">
                 Event time {new Date(event.event_time).toISOString()} · Received {new Date(event.received_at).toISOString()}
                 {event.closed_at && <> · Closed {new Date(event.closed_at).toISOString()}</>}
@@ -168,14 +168,12 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Observed</h2>
                 <p className="mt-2 text-sm text-zinc-100">{summarize(event)}</p>
               </div>
-
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Why suspicious</h2>
                 <p className="mt-2 text-sm text-zinc-100">
                   {event.ai_reasoning ?? <span className="text-zinc-500 italic">Not yet scored.</span>}
                 </p>
               </div>
-
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Recommended actions</h2>
                 {event.recommended_actions && event.recommended_actions.length > 0 ? (
@@ -197,6 +195,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   </p>
                 )}
               </div>
+            </section>
+
+            <section className="mt-8">
+              <RescoreButton eventId={event.id} />
             </section>
 
             <section className="mt-8">

@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import InvestigationControls from "./InvestigationControls";
+import RescoreButton from "./RescoreButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -202,7 +203,6 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                   {inv.event_count} event{inv.event_count === 1 ? "" : "s"}
                 </span>
               </div>
-
               <div className="mt-3 text-xs text-zinc-500">
                 Created {new Date(inv.created_at).toISOString()} · Updated {new Date(inv.updated_at).toISOString()}
                 {inv.closed_at && <> · Closed {new Date(inv.closed_at).toISOString()}</>}
@@ -216,7 +216,6 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                   {topReasoning ?? <span className="text-zinc-500 italic">No AI reasoning available.</span>}
                 </p>
               </div>
-
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Recommended actions</h2>
                 {actions.length > 0 ? (
@@ -241,6 +240,10 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
             </section>
 
             <section className="mt-8">
+              <RescoreButton investigationId={inv.id} />
+            </section>
+
+            <section className="mt-8">
               <InvestigationControls
                 investigationId={inv.id}
                 initialStatus={inv.status as "open" | "investigating" | "true_positive" | "false_positive"}
@@ -256,11 +259,9 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
               <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">
                 Correlated events ({events.length})
               </h2>
-
               {events.length === 0 && (
                 <p className="mt-2 text-sm text-zinc-500 italic">No events linked to this investigation.</p>
               )}
-
               {events.length > 0 && (
                 <ul className="mt-3 space-y-3">
                   {events.map((row) => (
@@ -294,7 +295,6 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                           {new Date(row.event_time).toISOString()}
                         </span>
                       </div>
-
                       <div className="mt-3 space-y-2 text-sm">
                         <div>
                           <span className="text-zinc-500">Observed:</span>{" "}
@@ -309,7 +309,6 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                           )}
                         </div>
                       </div>
-
                       <details className="mt-3">
                         <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-300">
                           Raw payload
