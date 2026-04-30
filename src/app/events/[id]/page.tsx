@@ -19,6 +19,7 @@ type EventRow = {
   ai_provider: string | null;
   ai_summary: string | null;
   ai_reasoning: string | null;
+  recommended_actions: string[] | null;
   investigation_id: string | null;
   status: string;
   notes: string | null;
@@ -81,7 +82,7 @@ async function getEvent(id: string): Promise<{ event: EventRow | null; error: st
   const supabase = getSupabaseServerClient();
   const result = await supabase
     .from("events")
-    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status, notes, closed_at")
+    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, recommended_actions, investigation_id, status, notes, closed_at")
     .eq("id", id)
     .maybeSingle();
   if (result.error) {
@@ -160,7 +161,7 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               </div>
             </header>
 
-            <section className="mt-6 space-y-4">
+            <section className="mt-6 space-y-6">
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Observed</h2>
                 <p className="mt-2 text-sm text-zinc-100">{summarize(event)}</p>
@@ -174,8 +175,25 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               </div>
 
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Next step</h2>
-                <p className="mt-2 text-sm text-zinc-500 italic">AI-recommended actions coming in Phase 3.5.</p>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Recommended actions</h2>
+                {event.recommended_actions && event.recommended_actions.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {event.recommended_actions.map((action, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-600 bg-zinc-800 text-zinc-500">
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                          </svg>
+                        </span>
+                        <span className="text-sm text-zinc-200">{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-500 italic">
+                    No actions available — rescore this event to generate recommendations.
+                  </p>
+                )}
               </div>
             </section>
 

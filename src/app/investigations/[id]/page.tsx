@@ -17,6 +17,7 @@ type InvestigationRow = {
   event_count: number;
   notes: string | null;
   closed_at: string | null;
+  recommended_actions: string[] | null;
 };
 
 type EventRow = {
@@ -32,6 +33,7 @@ type EventRow = {
   ai_provider: string | null;
   ai_summary: string | null;
   ai_reasoning: string | null;
+  recommended_actions: string[] | null;
   investigation_id: string | null;
   status: string;
 };
@@ -107,7 +109,7 @@ async function getInvestigation(id: string): Promise<{
 
   const invResult = await supabase
     .from("investigations")
-    .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at")
+    .select("id, created_at, updated_at, status, severity, mitre_technique, source_ip, event_count, notes, closed_at, recommended_actions")
     .eq("id", id)
     .maybeSingle();
 
@@ -121,7 +123,7 @@ async function getInvestigation(id: string): Promise<{
 
   const eventsResult = await supabase
     .from("events")
-    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, investigation_id, status")
+    .select("id, received_at, event_time, source_type, source_host, raw_payload, parsed, severity, mitre_technique, ai_provider, ai_summary, ai_reasoning, recommended_actions, investigation_id, status")
     .eq("investigation_id", id)
     .order("received_at", { ascending: false });
 
@@ -145,6 +147,12 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
   }
 
   const topReasoning = events.find((e) => e.ai_reasoning)?.ai_reasoning ?? null;
+
+  // Merge recommended_actions: inv-level first, fall back to first event that has them
+  const actions: string[] =
+    (inv?.recommended_actions && inv.recommended_actions.length > 0)
+      ? inv.recommended_actions
+      : (events.find((e) => e.recommended_actions && e.recommended_actions.length > 0)?.recommended_actions ?? []);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -200,7 +208,7 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
               </div>
             </header>
 
-            <section className="mt-6 space-y-4">
+            <section className="mt-6 space-y-6">
               <div>
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Why suspicious</h2>
                 <p className="mt-2 text-sm text-zinc-100">
@@ -209,8 +217,25 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
               </div>
 
               <div>
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Next step</h2>
-                <p className="mt-2 text-sm text-zinc-500 italic">AI-recommended actions coming in Phase 3.5.</p>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Recommended actions</h2>
+                {actions.length > 0 ? (
+                  <ul className="mt-3 space-y-2">
+                    {actions.map((action, i) => (
+                      <li key={i} className="flex items-start gap-3">
+                        <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border border-zinc-600 bg-zinc-800 text-zinc-500">
+                          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                            <rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+                          </svg>
+                        </span>
+                        <span className="text-sm text-zinc-200">{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-zinc-500 italic">
+                    No actions available — rescore an event in this investigation to generate recommendations.
+                  </p>
+                )}
               </div>
             </section>
 
@@ -243,7 +268,7 @@ export default async function InvestigationDetailPage({ params }: { params: Prom
                           {row.severity}
                         </span>
                         {row.mitre_technique && row.mitre_technique !== "unknown" && (
-                            <a
+                          <a
                             href={mitreUrl(row.mitre_technique)}
                             target="_blank"
                             rel="noopener noreferrer"
