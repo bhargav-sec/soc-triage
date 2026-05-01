@@ -104,6 +104,59 @@ function shortId(uuid: string) {
   return uuid.split("-")[0].toUpperCase();
 }
 
+
+function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  if (total === 0) return <p className="text-sm text-zinc-600 italic">No data.</p>;
+
+  const r = 40;
+  const cx = 56;
+  const cy = 56;
+  const circumference = 2 * Math.PI * r;
+
+  let offset = 0;
+  const slices = data.map((d) => {
+    const pct = d.value / total;
+    const dash = pct * circumference;
+    const gap = circumference - dash;
+    const slice = { ...d, pct, dash, gap, offset };
+    offset += dash;
+    return slice;
+  });
+
+  return (
+    <div className="flex items-center gap-6">
+      <svg width="112" height="112" viewBox="0 0 112 112">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272a" strokeWidth="18" />
+        {slices.map((s) => (
+          <circle
+            key={s.label}
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={s.color}
+            strokeWidth="18"
+            strokeDasharray={`${s.dash} ${s.gap}`}
+            strokeDashoffset={circumference / 4 - s.offset}
+            strokeLinecap="butt"
+          />
+        ))}
+        <text x={cx} y={cy - 5} textAnchor="middle" fill="#e4e4e7" fontSize="18" fontWeight="bold" fontFamily="monospace">{total}</text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#71717a" fontSize="8">total</text>
+      </svg>
+      <ul className="space-y-2">
+        {slices.map((s) => (
+          <li key={s.label} className="flex items-center gap-2 text-xs">
+            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: s.color }} />
+            <span className="uppercase text-zinc-400 w-16">{s.label}</span>
+            <span className="tabular-nums text-zinc-200 font-mono">{s.value}</span>
+            <span className="text-zinc-600">({Math.round(s.pct * 100)}%)</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default async function DashboardPage() {
   const data = await getDashboardData();
   const totalSev = Object.values(data.sevCounts).reduce((a, b) => a + b, 0) || 1;
@@ -138,26 +191,13 @@ export default async function DashboardPage() {
           {/* Severity Breakdown */}
           <div className="rounded-md border border-zinc-800 bg-zinc-900/60 px-5 py-5">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400 mb-4">Severity Breakdown</h2>
-            <div className="space-y-3">
-              {["critical", "high", "medium", "low", "unknown"].map((sev) => {
-                const count = data.sevCounts[sev] ?? 0;
-                const pct = Math.round((count / totalSev) * 100);
-                return (
-                  <div key={sev} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className={"uppercase font-medium " + severityColor(sev)}>{sev}</span>
-                      <span className="tabular-nums text-zinc-400">{count} <span className="text-zinc-600">({pct}%)</span></span>
-                    </div>
-                    <div className="h-1.5 w-full rounded-full bg-zinc-800">
-                      <div
-                        className={"h-full rounded-full " + severityBarColor(sev)}
-                        style={{ width: pct + "%" }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <DonutChart data={[
+              { label: "critical", value: data.sevCounts.critical ?? 0, color: "#ef4444" },
+              { label: "high",     value: data.sevCounts.high ?? 0,     color: "#f97316" },
+              { label: "medium",   value: data.sevCounts.medium ?? 0,   color: "#eab308" },
+              { label: "low",      value: data.sevCounts.low ?? 0,      color: "#3b82f6" },
+              { label: "unknown",  value: data.sevCounts.unknown ?? 0,  color: "#52525b" },
+            ].filter(d => d.value > 0)} />
           </div>
 
           {/* Top MITRE Techniques */}

@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import SendSampleButton from "./SendSampleButton";
 import RefreshButton from "./RefreshButton";
 import ViewTabs from "./HiddenClosedToggle";
+import SelectableEventList from "./SelectableEventList";
 import SeverityFilter from "./SeverityFilter";
 
 export const dynamic = "force-dynamic";
@@ -307,105 +308,58 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
         )}
 
         {!error && items.length > 0 && (
-          <ul className="mt-6 space-y-3">
-            {items.map((item) => {
-              if (item.kind === "investigation") {
-                const inv = item.row;
-                return (
-                  <li key={"inv-" + inv.id}>
-                    <Link
-                      href={"/investigations/" + inv.id}
-                      className={"block rounded-md border border-zinc-800 bg-zinc-900/40 p-4 border-l-4 transition hover:border-zinc-600 hover:bg-zinc-900/70 " + severityBorderClass(inv.severity)}
-                    >
-                      <div className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
-                          INV-{shortId(inv.id)}
-                        </span>
-                        <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + statusBadgeClass(inv.status)}>
-                          {inv.status.replace("_", " ")}
-                        </span>
-                        <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + severityBadgeClass(inv.severity)}>
-                          {inv.severity ?? "unknown"}
-                        </span>
-                        {inv.mitre_technique && inv.mitre_technique !== "unknown" && (
-                          <span className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-300">
-                            {inv.mitre_technique + " · " + (MITRE_NAMES[inv.mitre_technique] ?? "")}
-                          </span>
-                        )}
-                        {inv.source_ip && (
-                          <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 font-mono text-zinc-300">
-                            {inv.source_ip}
-                          </span>
-                        )}
-                        <span className="text-zinc-400">
-                          {inv.event_count} event{inv.event_count === 1 ? "" : "s"}
-                        </span>
-                        <span className="ml-auto text-zinc-500">
-                          {new Date(inv.updated_at).toISOString()}
-                        </span>
-                      </div>
-                      <div className="mt-3 text-sm text-zinc-300">
-                        Investigation · click to open
-                      </div>
-                    </Link>
-                  </li>
-                );
-              }
-
-              const row = item.row;
+          <div className="mt-6 space-y-3">
+            {/* Investigation rows */}
+            {items.filter(i => i.kind === "investigation").map((item) => {
+              const inv = item.row;
               return (
-                <li key={"evt-" + row.id}>
+                <li key={"inv-" + inv.id} style={{listStyle:"none"}}>
                   <Link
-                    href={"/events/" + row.id}
-                    className="block rounded-md border border-zinc-800 bg-zinc-900/40 p-4 transition hover:border-zinc-600 hover:bg-zinc-900/70"
+                    href={"/investigations/" + inv.id}
+                    className={"block rounded-md border border-zinc-800 bg-zinc-900/40 p-4 border-l-4 transition hover:border-zinc-600 hover:bg-zinc-900/70 " + severityBorderClass(inv.severity)}
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 font-mono text-zinc-400">
-                        EVT-{shortId(row.id)}
+                      <span className="rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-0.5 font-mono text-cyan-300">
+                        INV-{shortId(inv.id)}
                       </span>
-                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + statusBadgeClass(row.status)}>
-                        {row.status.replace("_", " ")}
+                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + statusBadgeClass(inv.status)}>
+                        {inv.status.replace("_", " ")}
                       </span>
-                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + severityBadgeClass(row.severity)}>
-                        {row.severity}
+                      <span className={"rounded border px-2 py-0.5 font-medium uppercase tracking-wide " + severityBadgeClass(inv.severity)}>
+                        {inv.severity ?? "unknown"}
                       </span>
-                      {row.mitre_technique && row.mitre_technique !== "unknown" && (
+                      {inv.mitre_technique && inv.mitre_technique !== "unknown" && (
                         <span className="rounded border border-purple-500/40 bg-purple-500/10 px-2 py-0.5 text-purple-300">
-                          {row.mitre_technique + " · " + (MITRE_NAMES[row.mitre_technique] ?? "")}
+                          {inv.mitre_technique + " · " + (MITRE_NAMES[inv.mitre_technique] ?? "")}
                         </span>
                       )}
-                      <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 text-zinc-300">
-                        {row.source_type}
+                      {inv.source_ip && (
+                        <span className="rounded border border-zinc-700 bg-zinc-800/60 px-2 py-0.5 font-mono text-zinc-300">
+                          {inv.source_ip}
+                        </span>
+                      )}
+                      <span className="text-zinc-400">
+                        {inv.event_count} event{inv.event_count === 1 ? "" : "s"}
                       </span>
-                      {row.source_host && (
-                        <span className="text-zinc-400">
-                          host: <span className="text-zinc-200">{row.source_host}</span>
-                        </span>
-                      )}
                       <span className="ml-auto text-zinc-500">
-                        {new Date(row.event_time).toISOString()}
+                        {new Date(inv.updated_at).toISOString()}
                       </span>
                     </div>
-
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div>
-                        <span className="text-zinc-500">Observed:</span>{" "}
-                        <span className="text-zinc-100">{summarize(row)}</span>
-                      </div>
-                      <div>
-                        <span className="text-zinc-500">Why suspicious:</span>{" "}
-                        {row.ai_reasoning ? (
-                          <span className="text-zinc-100">{row.ai_reasoning}</span>
-                        ) : (
-                          <span className="text-zinc-500 italic">not yet scored</span>
-                        )}
-                      </div>
+                    <div className="mt-3 text-sm text-zinc-300">
+                      Investigation · click to open
                     </div>
                   </Link>
                 </li>
               );
             })}
-          </ul>
+
+            {/* Event rows — selectable for bulk dismiss */}
+            <SelectableEventList
+              events={items
+                .filter((i): i is { kind: "event"; row: EventRow; sortAt: string } => i.kind === "event")
+                .map(i => i.row)}
+            />
+          </div>
         )}
 
         <footer className="mt-10 border-t border-zinc-800 pt-4 text-xs text-zinc-600">

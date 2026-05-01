@@ -4,14 +4,15 @@ import { scoreEvent } from "@/lib/ai-scorer";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   const supabase = getSupabaseServerClient();
 
   const { data: event, error } = await supabase
     .from("events")
     .select("id, source_type, source_host, raw_payload, parsed")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (error || !event) {
@@ -43,14 +44,14 @@ export async function POST(
       recommended_actions: scoring.verdict.recommended_actions,
       last_scored_at: new Date().toISOString(),
     })
-    .eq("id", params.id);
+    .eq("id", id);
 
   if (updateError) {
     return NextResponse.json({ error: "update_failed", detail: updateError.message }, { status: 500 });
   }
 
   return NextResponse.json({
-    id: event.id,
+    id,
     severity: scoring.verdict.severity,
     mitre_technique: scoring.verdict.mitre_technique,
     ai_provider: scoring.provider,

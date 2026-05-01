@@ -4,6 +4,7 @@ import Link from "next/link";
 import EventControls from "./EventControls";
 import WalkthroughPanel from "./WalkthroughPanel";
 import RescoreButton from "./RescoreButton";
+import CopyButton from "./CopyButton";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -161,6 +162,16 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
               <div className="mt-3 text-xs text-zinc-500">
                 Event time {new Date(event.event_time).toISOString()} · Received {new Date(event.received_at).toISOString()}
                 {event.closed_at && <> · Closed {new Date(event.closed_at).toISOString()}</>}
+              </div>
+              <div className="mt-3 flex items-center gap-2">
+                <CopyButton
+                  eventId={"EVT-" + shortId(event.id)}
+                  severity={event.severity}
+                  mitreLabel={event.mitre_technique + (MITRE_NAMES[event.mitre_technique] ? " · " + MITRE_NAMES[event.mitre_technique] : "")}
+                  summary={summarize(event)}
+                  reasoning={event.ai_reasoning}
+                  rawPayload={event.raw_payload}
+                />
               </div>
             </header>
 
