@@ -1,20 +1,27 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type View = "active" | "investigating" | "closed";
 
 export default function ViewTabs() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const param = searchParams.get("view");
-  const current: View =
-    param === "investigating" ? "investigating" :
-    param === "closed" ? "closed" :
-    "active";
+  const [current, setCurrent] = useState<View>("active");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const param = params.get("view");
+    setCurrent(
+      param === "investigating" ? "investigating" :
+      param === "closed" ? "closed" :
+      "active"
+    );
+  }, []);
 
   function go(view: View) {
     if (view === current) return;
+    setCurrent(view);
     if (view === "active") {
       router.push("/");
     } else {

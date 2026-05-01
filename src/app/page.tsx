@@ -280,13 +280,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
           </div>
 
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-            <Suspense fallback={null}>
-              <SeverityFilter />
-            </Suspense>
-            <Suspense fallback={null}>
-              <ViewTabs />
-            </Suspense>
-          </div>
+  <Suspense fallback={<div className="h-8" />}>
+    <SeverityFilter />
+    <ViewTabs />
+  </Suspense>
+</div>
         </header>
 
         {error && (

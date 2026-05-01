@@ -1,6 +1,7 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type Severity = "critical" | "high" | "medium" | "low" | "unknown";
 
@@ -22,16 +23,21 @@ function chipClass(sev: Severity, selected: boolean): string {
 
 export default function SeverityFilter() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const sevParam = searchParams.get("sev") ?? "";
-  const selected = new Set(sevParam.split(",").filter(Boolean) as Severity[]);
+  const [selected, setSelected] = useState<Set<Severity>>(new Set());
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sevParam = params.get("sev") ?? "";
+    setSelected(new Set(sevParam.split(",").filter(Boolean) as Severity[]));
+  }, []);
 
   function toggle(sev: Severity) {
     const next = new Set(selected);
     if (next.has(sev)) next.delete(sev);
     else next.add(sev);
+    setSelected(next);
 
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(window.location.search);
     if (next.size === 0) {
       params.delete("sev");
     } else {
@@ -42,7 +48,8 @@ export default function SeverityFilter() {
   }
 
   function clearAll() {
-    const params = new URLSearchParams(searchParams.toString());
+    setSelected(new Set());
+    const params = new URLSearchParams(window.location.search);
     params.delete("sev");
     const qs = params.toString();
     router.push(qs ? "/?" + qs : "/");
