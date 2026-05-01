@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type LineResult = { ok: boolean };
@@ -12,6 +13,7 @@ type FileResult = {
 };
 
 export default function UploadForm() {
+  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const cancelRef = useRef(false);
 
@@ -126,6 +128,11 @@ export default function UploadForm() {
       setCancelled(true);
     } else {
       setDone(true);
+      if (files.length === 1) {
+        router.push("/sources/" + encodeURIComponent(files[0].name));
+      } else {
+        router.push("/sources");
+      }
     }
   }
 

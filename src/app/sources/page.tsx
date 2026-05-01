@@ -93,15 +93,15 @@ export default async function SourcesPage() {
             {sources.map((source) => (
               <li
                 key={source.source_label}
-                className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3"
+                className="flex items-center justify-between rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 hover:border-zinc-600 hover:bg-zinc-900/70 transition"
               >
-                <div className="space-y-1">
+                <Link href={"/sources/" + encodeURIComponent(source.source_label)} className="flex-1 space-y-1 min-w-0">
                   <p className="font-mono text-sm text-zinc-100">{source.source_label}</p>
                   <p className="text-xs text-zinc-500">
                     {source.event_count} event{source.event_count === 1 ? "" : "s"} · last seen{" "}
                     {new Date(source.last_seen).toISOString()}
                   </p>
-                </div>
+                </Link>
                 <DeleteSourceButton
                   label={source.source_label}
                   eventCount={source.event_count}
