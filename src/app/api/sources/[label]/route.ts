@@ -15,7 +15,7 @@ export async function DELETE(
     .from("events")
     .delete()
     .eq("source_label", decoded)
-    .not("status", "in", '("open","investigating")')
+    
     .select("id");
 
   if (error) {
