@@ -73,8 +73,12 @@ export default function UploadForm() {
     const files = inputRef.current?.files;
     if (!files || files.length === 0) return;
 
-    reset();
     cancelRef.current = false;
+    setRunning(true);
+    setDone(false);
+    setCancelled(false);
+    setTotalFiles(files.length);
+    setFileResults([]);
     setRunning(true);
     setDone(false);
     setCancelled(false);
