@@ -2,6 +2,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import EventControls from "./EventControls";
+import WalkthroughPanel from "./WalkthroughPanel";
 import RescoreButton from "./RescoreButton";
 
 export const dynamic = "force-dynamic";
@@ -195,6 +196,10 @@ export default async function EventDetailPage({ params }: { params: Promise<{ id
                   </p>
                 )}
               </div>
+            </section>
+
+            <section className="mt-8">
+              <WalkthroughPanel eventId={event.id} />
             </section>
 
             <section className="mt-8">
