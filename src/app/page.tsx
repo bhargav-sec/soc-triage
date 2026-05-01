@@ -159,9 +159,12 @@ async function getData(view: View, sevArray: string[]): Promise<{
     invResult,
     uncorrEventsResult,
     severityCountsResult,
-    activeCountResult,
-    investigatingCountResult,
-    closedCountResult,
+    invActiveCount,
+    invInvestigatingCount,
+    invClosedCount,
+    evtActiveCount,
+    evtInvestigatingCount,
+    evtClosedCount,
   ] = await Promise.all([
     baseInvQuery,
     uncorrEventsQuery,
@@ -169,6 +172,9 @@ async function getData(view: View, sevArray: string[]): Promise<{
     supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", ACTIVE_STATUSES),
     supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", INVESTIGATING_STATUSES),
     supabase.from("investigations").select("id", { count: "exact", head: true }).in("status", CLOSED_STATUSES),
+    supabase.from("events").select("id", { count: "exact", head: true }).in("status", ACTIVE_STATUSES),
+    supabase.from("events").select("id", { count: "exact", head: true }).in("status", INVESTIGATING_STATUSES),
+    supabase.from("events").select("id", { count: "exact", head: true }).in("status", CLOSED_STATUSES),
   ]);
 
   if (invResult.error) {
@@ -221,9 +227,9 @@ async function getData(view: View, sevArray: string[]): Promise<{
     items,
     counts,
     totalEvents,
-    closedCount: closedCountResult.count ?? 0,
-    activeCount: activeCountResult.count ?? 0,
-    investigatingCount: investigatingCountResult.count ?? 0,
+    activeCount: (invActiveCount.count ?? 0) + (evtActiveCount.count ?? 0),
+    investigatingCount: (invInvestigatingCount.count ?? 0) + (evtInvestigatingCount.count ?? 0),
+    closedCount: (invClosedCount.count ?? 0) + (evtClosedCount.count ?? 0),
     error: null,
   };
 }
@@ -260,6 +266,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             <div className="flex gap-2">
               <SendSampleButton />
               <Link href="/upload" className="rounded-md border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">Upload logs</Link>
+              <Link href="/sources" className="rounded-md border border-zinc-700 bg-zinc-900/40 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800">Sources</Link>
               <RefreshButton />
             </div>
           </div>
