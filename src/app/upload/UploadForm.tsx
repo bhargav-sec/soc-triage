@@ -135,6 +135,11 @@ export default function UploadForm() {
 
   return (
     <div className="space-y-6">
+      <div>
+        <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200">
+          &larr; Back to queue
+        </Link>
+      </div>
       {!running && !done && !cancelled && (
         <div className="space-y-4">
           <div>
