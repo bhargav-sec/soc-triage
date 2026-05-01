@@ -1,53 +1,41 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
 type View = "active" | "investigating" | "closed";
 
-export default function ViewTabs() {
+function Tabs() {
   const router = useRouter();
-  const [current, setCurrent] = useState<View>("active");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const param = params.get("view");
-    setCurrent(
-      param === "investigating" ? "investigating" :
-      param === "closed" ? "closed" :
-      "active"
-    );
-  }, []);
+  const searchParams = useSearchParams();
+  const current: View =
+    searchParams.get("view") === "investigating" ? "investigating" :
+    searchParams.get("view") === "closed" ? "closed" :
+    "active";
 
   function go(view: View) {
-    if (view === current) return;
-    setCurrent(view);
-    if (view === "active") {
-      router.push("/");
-    } else {
-      router.push("/?view=" + view);
-    }
+    router.push(view === "active" ? "/" : "/?view=" + view);
   }
 
-  function tabClass(view: View): string {
-    const isActive = view === current;
-    if (isActive) {
-      return "rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100";
-    }
-    return "rounded border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200";
+  function tabClass(view: View) {
+    return current === view
+      ? "rounded border border-zinc-600 bg-zinc-800 px-3 py-1.5 text-xs font-medium text-zinc-100"
+      : "rounded border border-zinc-800 bg-zinc-900/40 px-3 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition";
   }
 
   return (
     <div className="flex items-center gap-1">
-      <button type="button" onClick={() => go("active")} className={tabClass("active")}>
-        Active
-      </button>
-      <button type="button" onClick={() => go("investigating")} className={tabClass("investigating")}>
-        Investigating
-      </button>
-      <button type="button" onClick={() => go("closed")} className={tabClass("closed")}>
-        Closed
-      </button>
+      <button type="button" onClick={() => go("active")} className={tabClass("active")}>Active</button>
+      <button type="button" onClick={() => go("investigating")} className={tabClass("investigating")}>Investigating</button>
+      <button type="button" onClick={() => go("closed")} className={tabClass("closed")}>Closed</button>
     </div>
+  );
+}
+
+export default function ViewTabs() {
+  return (
+    <Suspense fallback={<div className="h-8 w-48 rounded bg-zinc-800 animate-pulse" />}>
+      <Tabs />
+    </Suspense>
   );
 }

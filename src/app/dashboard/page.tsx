@@ -1,6 +1,8 @@
 import { getSupabaseServerClient } from "@/lib/supabase";
 import Link from "next/link";
 
+import SeverityChart from "./SeverityChart";
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -90,24 +92,10 @@ function severityColor(s: string) {
   }
 }
 
-function severityBarColor(s: string) {
-  switch (s) {
-    case "critical": return "bg-red-500";
-    case "high": return "bg-orange-500";
-    case "medium": return "bg-yellow-500";
-    case "low": return "bg-blue-500";
-    default: return "bg-zinc-500";
-  }
-}
-
 function shortId(uuid: string) {
   return uuid.split("-")[0].toUpperCase();
 }
 
-
-function DonutChart({ data }: { data: { label: string; value: number; color: string }[] }) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0) return <p className="text-sm text-zinc-600 italic">No data.</p>;
 
   const r = 40;
   const cx = 56;
@@ -189,16 +177,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 
           {/* Severity Breakdown */}
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/60 px-5 py-5">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-400 mb-4">Severity Breakdown</h2>
-            <DonutChart data={[
-              { label: "critical", value: data.sevCounts.critical ?? 0, color: "#ef4444" },
-              { label: "high",     value: data.sevCounts.high ?? 0,     color: "#f97316" },
-              { label: "medium",   value: data.sevCounts.medium ?? 0,   color: "#eab308" },
-              { label: "low",      value: data.sevCounts.low ?? 0,      color: "#3b82f6" },
-              { label: "unknown",  value: data.sevCounts.unknown ?? 0,  color: "#52525b" },
-            ].filter(d => d.value > 0)} />
-          </div>
+          <SeverityChart counts={data.sevCounts} />
 
           {/* Top MITRE Techniques */}
           <div className="rounded-md border border-zinc-800 bg-zinc-900/60 px-5 py-5">
