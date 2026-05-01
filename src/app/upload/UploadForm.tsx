@@ -41,7 +41,8 @@ export default function UploadForm() {
 
   function parseLines(text: string): string[] {
     return text
-      .split("\n")
+      .split("
+")
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !l.startsWith("#"));
   }
