@@ -2,40 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase";
 import { scoreEvent } from "@/lib/ai-scorer";
 
-/**
- * POST /api/ingest
- *
- * Phase 1: validate body, insert into events table.
- * Phase 2: after insert, score with AI and update the row with severity,
- *          mitre_technique, ai_summary, ai_reasoning, ai_provider,
- *          recommended_actions, last_scored_at.
- *          Always returns 201 on successful insert, even if AI scoring fails.
- *
- * Required body fields:
- *   - source_type:  string
- *   - event_time:   ISO-8601 string
- *   - raw_payload:  string
- *
- * Optional body fields:
- *   - source_host:  string
- *   - parsed:       object
- *
- * Response:
- *   201 { id, received_at, status, severity, mitre_technique, ai_provider }
- *   400 { error, field? }
- *   500 { error }
- */
-
 type IngestBody = {
   source_type?: unknown;
   event_time?: unknown;
   raw_payload?: unknown;
   source_host?: unknown;
   parsed?: unknown;
+  source_label?: string;
 };
 
 export async function POST(request: NextRequest) {
-  // 1. Parse JSON body
   let body: IngestBody;
   try {
     body = await request.json();
@@ -43,7 +19,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  // 2. Validate required fields
   const required = ["source_type", "event_time", "raw_payload"] as const;
   for (const field of required) {
     if (typeof body[field] !== "string" || (body[field] as string).length === 0) {
@@ -54,7 +29,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Validate event_time
   const eventTime = new Date(body.event_time as string);
   if (Number.isNaN(eventTime.getTime())) {
     return NextResponse.json(
@@ -63,7 +37,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 4. Validate optional `parsed`
   let parsed: Record<string, unknown> = {};
   if (body.parsed !== undefined && body.parsed !== null) {
     if (typeof body.parsed !== "object" || Array.isArray(body.parsed)) {
@@ -75,10 +48,11 @@ export async function POST(request: NextRequest) {
     parsed = body.parsed as Record<string, unknown>;
   }
 
-  // 5. Insert event
   const supabase = getSupabaseServerClient();
   const sourceHost =
     typeof body.source_host === "string" ? body.source_host : null;
+  const sourceLabel =
+    typeof body.source_label === "string" ? body.source_label : null;
 
   const { data: inserted, error: insertError } = await supabase
     .from("events")
@@ -88,6 +62,7 @@ export async function POST(request: NextRequest) {
       raw_payload: body.raw_payload as string,
       source_host: sourceHost,
       parsed,
+      source_label: sourceLabel,
     })
     .select("id, received_at, status")
     .single();
@@ -100,7 +75,6 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // 6. AI scoring
   const scoring = await scoreEvent({
     source_type: body.source_type as string,
     source_host: sourceHost,
@@ -147,7 +121,6 @@ export async function POST(request: NextRequest) {
     console.error("[ingest] supabase ai-update error (non-fatal):", updateError);
   }
 
-  // 6.5. Correlation
   const { data: corr, error: corrError } = await supabase.rpc("correlate_event", {
     p_event_id: inserted.id,
   });
@@ -167,7 +140,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 7. Return enriched response
   return NextResponse.json(
     {
       id: inserted.id,

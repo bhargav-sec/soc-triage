@@ -1,241 +1,259 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 
-type Status = "idle" | "uploading" | "done";
-
-function parseSyslogTimestamp(line: string): string {
-  const match = line.match(/^([A-Za-z]{3})\s+(\d{1,2})\s+(\d{2}:\d{2}:\d{2})/);
-  if (!match) return new Date().toISOString();
-  const [, mon, day, time] = match;
-  const year = new Date().getFullYear();
-  const attempt = new Date(`${mon} ${day} ${year} ${time}`);
-  if (isNaN(attempt.getTime())) return new Date().toISOString();
-  return attempt.toISOString();
-}
+type LineResult = { ok: boolean };
+type FileResult = {
+  filename: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+};
 
 export default function UploadForm() {
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<Status>("idle");
-  const [current, setCurrent] = useState(0);
-  const [total, setTotal] = useState(0);
-  const [successCount, setSuccessCount] = useState(0);
-  const [failureCount, setFailureCount] = useState(0);
-  const [deleteState, setDeleteState] = useState<"idle" | "confirming" | "deleting" | "done">("idle");
-  const [deletedCount, setDeletedCount] = useState(0);
-  const cancelledRef = useRef(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const cancelRef = useRef(false);
 
-  async function handleUpload() {
-    if (!file) return;
-    const text = await file.text();
-    const lines = text
+  const [running, setRunning] = useState(false);
+  const [currentFileIndex, setCurrentFileIndex] = useState(0);
+  const [totalFiles, setTotalFiles] = useState(0);
+  const [currentFilename, setCurrentFilename] = useState("");
+  const [currentLine, setCurrentLine] = useState(0);
+  const [totalLines, setTotalLines] = useState(0);
+  const [fileResults, setFileResults] = useState<FileResult[]>([]);
+  const [done, setDone] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+
+  function reset() {
+    cancelRef.current = false;
+    setRunning(false);
+    setCurrentFileIndex(0);
+    setTotalFiles(0);
+    setCurrentFilename("");
+    setCurrentLine(0);
+    setTotalLines(0);
+    setFileResults([]);
+    setDone(false);
+    setCancelled(false);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  function parseLines(text: string): string[] {
+    return text
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0 && !l.startsWith("#"));
-    if (lines.length === 0) return;
-    cancelledRef.current = false;
-    setStatus("uploading");
-    setTotal(lines.length);
-    setCurrent(0);
-    setSuccessCount(0);
-    setFailureCount(0);
-    let success = 0;
-    let failure = 0;
-    for (let i = 0; i < lines.length; i++) {
-      if (cancelledRef.current) break;
-      setCurrent(i + 1);
-      try {
-        const res = await fetch("/api/ingest", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            raw_payload: lines[i],
-            source_type: "linux_auth",
-            source_host: "uploaded",
-            event_time: parseSyslogTimestamp(lines[i]),
-          }),
-        });
-        if (res.ok) { success++; } else { failure++; }
-      } catch {
-        failure++;
-      }
-      setSuccessCount(success);
-      setFailureCount(failure);
-      if (i < lines.length - 1 && !cancelledRef.current) {
-        await new Promise((r) => setTimeout(r, 600));
-      }
-    }
-    setStatus("done");
   }
 
-  function handleCancel() { cancelledRef.current = true; }
-
-  function handleReset() {
-    setFile(null);
-    setStatus("idle");
-    setCurrent(0);
-    setTotal(0);
-    setSuccessCount(0);
-    setFailureCount(0);
-    cancelledRef.current = false;
-  }
-
-  async function handleDelete() {
-    setDeleteState("deleting");
+  async function ingestLine(line: string, filename: string): Promise<LineResult> {
+    const now = new Date().toISOString();
     try {
-      const res = await fetch("/api/ingest/uploaded", { method: "DELETE" });
-      const json = await res.json();
-      setDeletedCount(json.deleted ?? 0);
-      setDeleteState("done");
+      const res = await fetch("/api/ingest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source_type: "log_upload",
+          event_time: now,
+          raw_payload: line,
+          source_label: filename,
+        }),
+      });
+      return { ok: res.ok };
     } catch {
-      setDeleteState("idle");
+      return { ok: false };
     }
   }
 
-  const pct = total > 0 ? Math.round((current / total) * 100) : 0;
+  function sleep(ms: number) {
+    return new Promise((r) => setTimeout(r, ms));
+  }
+
+  async function handleUpload() {
+    const files = inputRef.current?.files;
+    if (!files || files.length === 0) return;
+
+    reset();
+    cancelRef.current = false;
+    setRunning(true);
+    setDone(false);
+    setCancelled(false);
+    setTotalFiles(files.length);
+    setFileResults([]);
+
+    const allResults: FileResult[] = [];
+
+    for (let f = 0; f < files.length; f++) {
+      if (cancelRef.current) break;
+
+      const file = files[f];
+      setCurrentFileIndex(f + 1);
+      setCurrentFilename(file.name);
+
+      const text = await file.text();
+      const lines = parseLines(text);
+      setTotalLines(lines.length);
+      setCurrentLine(0);
+
+      let succeeded = 0;
+      let failed = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        if (cancelRef.current) break;
+        setCurrentLine(i + 1);
+        const result = await ingestLine(lines[i], file.name);
+        if (result.ok) succeeded++;
+        else failed++;
+        if (i < lines.length - 1) await sleep(600);
+      }
+
+      const fileResult: FileResult = {
+        filename: file.name,
+        total: lines.length,
+        succeeded,
+        failed,
+      };
+      allResults.push(fileResult);
+      setFileResults([...allResults]);
+    }
+
+    setRunning(false);
+    if (cancelRef.current) {
+      setCancelled(true);
+    } else {
+      setDone(true);
+    }
+  }
+
+  function handleCancel() {
+    cancelRef.current = true;
+  }
+
+  const totalSucceeded = fileResults.reduce((s, r) => s + r.succeeded, 0);
+  const totalFailed = fileResults.reduce((s, r) => s + r.failed, 0);
+  const totalProcessed = fileResults.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/" className="text-sm text-zinc-400 hover:text-zinc-200 transition">
-          Back to queue
-        </Link>
-      </div>
-
-      <h1 className="text-2xl font-semibold tracking-tight mb-1">Bulk Log Upload</h1>
-      <p className="text-sm text-zinc-400 mb-8">
-        Upload a .log or .txt file. Each line is ingested as a separate event with AI scoring.
-        Lines starting with # are skipped.
-      </p>
-
-      {status === "idle" && (
-        <div className="space-y-5">
+    <div className="space-y-6">
+      {!running && !done && !cancelled && (
+        <div className="space-y-4">
           <div>
-            <label htmlFor="logfile" className="block text-sm text-zinc-400 mb-2">
-              Select file
+            <label className="block text-sm font-medium text-zinc-300 mb-2">
+              Select log files
             </label>
             <input
-              id="logfile"
+              ref={inputRef}
               type="file"
-              accept=".log,.txt"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-              className="block w-full text-sm text-zinc-300 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-zinc-700 file:bg-zinc-800 file:text-zinc-200 file:text-sm file:cursor-pointer hover:file:bg-zinc-700 file:transition cursor-pointer"
+              multiple
+              accept=".log,.txt,.csv"
+              className="block w-full text-sm text-zinc-400 file:mr-4 file:rounded file:border file:border-zinc-600 file:bg-zinc-800 file:px-3 file:py-1.5 file:text-sm file:text-zinc-200 hover:file:bg-zinc-700"
             />
-            {file && (
-              <p className="mt-2 text-xs text-zinc-500">
-                {file.name} · {(file.size / 1024).toFixed(1)} KB
-              </p>
-            )}
+            <p className="mt-1 text-xs text-zinc-500">
+              Select one or more .log / .txt / .csv files. Each file is processed individually.
+            </p>
           </div>
           <button
+            type="button"
             onClick={handleUpload}
-            disabled={!file}
-            className="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 hover:border-zinc-600 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white transition"
           >
-            Upload and Ingest
+            Upload and ingest
           </button>
         </div>
       )}
 
-      {status === "uploading" && (
-        <div className="space-y-5">
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm text-zinc-300">Processing line {current} of {total}</span>
-              <span className="text-sm text-zinc-500">{pct}%</span>
-            </div>
-            <div className="h-2 w-full rounded-full bg-zinc-800 overflow-hidden">
-              <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: pct + "%" }} />
+      {running && (
+        <div className="space-y-4">
+          <div className="rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 space-y-2">
+            <p className="text-sm text-zinc-300">
+              Processing file <span className="text-white font-medium">{currentFileIndex}</span> of{" "}
+              <span className="text-white font-medium">{totalFiles}</span>:{" "}
+              <span className="font-mono text-zinc-200">{currentFilename}</span>
+            </p>
+            <p className="text-xs text-zinc-500">
+              Line {currentLine} of {totalLines}
+            </p>
+            <div className="h-1.5 w-full rounded-full bg-zinc-800 overflow-hidden">
+              <div
+                className="h-full bg-zinc-400 transition-all duration-300"
+                style={{ width: totalLines > 0 ? (currentLine / totalLines) * 100 + "%" : "0%" }}
+              />
             </div>
           </div>
-          <div className="flex gap-4 text-sm">
-            <span className="text-emerald-400">{successCount} ingested</span>
-            <span className="text-red-400">{failureCount} failed</span>
-          </div>
+
+          {fileResults.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">Completed files</p>
+              {fileResults.map((r, i) => (
+                <div key={i} className="flex items-center justify-between rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs">
+                  <span className="font-mono text-zinc-300">{r.filename}</span>
+                  <span className="text-zinc-500">
+                    <span className="text-emerald-400">{r.succeeded} ok</span>
+                    {r.failed > 0 && <span className="text-red-400 ml-2">{r.failed} failed</span>}
+                    <span className="ml-2 text-zinc-600">/ {r.total} lines</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           <button
+            type="button"
             onClick={handleCancel}
-            className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition"
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-300 hover:bg-red-500/20 transition"
           >
             Cancel
           </button>
         </div>
       )}
 
-      {status === "done" && (
-        <div className="space-y-5">
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/50 px-5 py-4 space-y-2">
-            <p className="text-sm font-medium text-zinc-200">Upload complete</p>
-            <p className="text-sm text-zinc-400">
-              {current} of {total} lines processed
-              {cancelledRef.current && (
-                <span className="ml-2 text-amber-400">(cancelled early)</span>
-              )}
-            </p>
-            <div className="flex gap-4 text-sm pt-1">
-              <span className="text-emerald-400">{successCount} ingested</span>
-              <span className="text-red-400">{failureCount} failed</span>
+      {(done || cancelled) && (
+        <div className="space-y-4">
+          {cancelled && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+              Upload cancelled.
             </div>
+          )}
+
+          {done && (
+            <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-300">
+              All files processed — {totalSucceeded} lines ingested
+              {totalFailed > 0 && <>, {totalFailed} failed</>}
+              {" "}across {fileResults.length} file{fileResults.length === 1 ? "" : "s"}.
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <p className="text-xs text-zinc-500 uppercase tracking-wide font-medium">File summary</p>
+            {fileResults.map((r, i) => (
+              <div key={i} className="flex items-center justify-between rounded border border-zinc-800 bg-zinc-900/40 px-3 py-2 text-xs">
+                <span className="font-mono text-zinc-300">{r.filename}</span>
+                <span className="text-zinc-500">
+                  <span className="text-emerald-400">{r.succeeded} ok</span>
+                  {r.failed > 0 && <span className="text-red-400 ml-2">{r.failed} failed</span>}
+                  <span className="ml-2 text-zinc-600">/ {r.total} lines</span>
+                </span>
+              </div>
+            ))}
           </div>
+
           <div className="flex gap-3">
-            <Link
-              href="/"
+            <button
+              type="button"
+              onClick={reset}
               className="rounded-md border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm text-zinc-200 hover:bg-zinc-700 transition"
             >
-              View queue
-            </Link>
-            <button
-              onClick={handleReset}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm text-zinc-400 hover:text-zinc-200 hover:border-zinc-600 transition"
-            >
-              Upload another file
+              Upload more files
             </button>
+            <Link
+              href="/"
+              className="rounded-md bg-zinc-100 px-4 py-2 text-sm font-medium text-zinc-900 hover:bg-white transition"
+            >
+              Go to dashboard
+            </Link>
           </div>
         </div>
       )}
-
-      <div className="mt-10 border-t border-zinc-800 pt-6">
-        <p className="text-xs text-zinc-500 mb-3">Danger zone</p>
-        {deleteState === "idle" && (
-          <button
-            onClick={() => setDeleteState("confirming")}
-            className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-red-400 hover:bg-red-500/20 transition"
-          >
-            Delete all uploaded events
-          </button>
-        )}
-        {deleteState === "confirming" && (
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-zinc-400">Delete all events where source_host = uploaded?</span>
-            <button
-              onClick={handleDelete}
-              className="rounded-md border border-red-500/40 bg-red-500/15 px-3 py-1.5 text-sm text-red-300 hover:bg-red-500/25 transition"
-            >
-              Yes, delete
-            </button>
-            <button
-              onClick={() => setDeleteState("idle")}
-              className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-200 transition"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-        {deleteState === "deleting" && (
-          <p className="text-sm text-zinc-400">Deleting...</p>
-        )}
-        {deleteState === "done" && (
-          <div className="flex items-center gap-3">
-            <p className="text-sm text-emerald-400">{deletedCount} uploaded event{deletedCount === 1 ? "" : "s"} deleted.</p>
-            <button
-              onClick={() => setDeleteState("idle")}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
