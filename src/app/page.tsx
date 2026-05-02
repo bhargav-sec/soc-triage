@@ -284,7 +284,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   <Suspense fallback={<div className="h-8" />}>
     <SeverityFilter />
     <ViewTabs />
-          <GroupToggle />
   </Suspense>
 </div>
         </header>
