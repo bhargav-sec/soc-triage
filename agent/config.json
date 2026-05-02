@@ -4,7 +4,7 @@
   "source_type": "linux_auth",
   "log_file": "/tmp/fake-auth.log",
   "poll_interval_seconds": 5,
-  "api_key": "",
+  "api_key": "ProtectionBypassforAutomationrbc",
   "batch_size": 10,
   "dry_run": false
 }

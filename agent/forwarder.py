@@ -128,7 +128,7 @@ def post_event(event: dict, cfg: dict, logger: logging.Logger) -> bool:
     body = json.dumps(event).encode()
     headers = {"Content-Type": "application/json"}
     if cfg["api_key"]:
-        headers["X-API-Key"] = cfg["api_key"]
+        headers["x-vercel-protection-bypass"] = cfg["api_key"]
 
     try:
         req = urllib.request.Request(cfg["target_url"], data=body,
