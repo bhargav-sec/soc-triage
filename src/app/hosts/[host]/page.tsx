@@ -46,7 +46,7 @@ export default async function HostTimelinePage({
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, event_time, severity, mitre_technique, ai_summary, raw_payload, status, source_type, parsed")
+    .select("id, event_time, severity, mitre_technique, ai_summary, raw_payload, status, source_type, parsed, source_label")
     .eq("source_host", decodedHost)
     .order("event_time", { ascending: false })
     .limit(200);
@@ -111,41 +111,64 @@ export default async function HostTimelinePage({
           <div className="absolute left-3 top-0 bottom-0 w-px bg-zinc-800" />
 
           <div className="space-y-3">
-            {events.map((evt) => (
-              <div key={evt.id} className="relative flex gap-4 pl-10">
-                {/* Dot on timeline */}
-                <div
-                  className="absolute left-0 top-4 h-6 w-6 rounded-full border-2 border-zinc-900 flex items-center justify-center"
-                  style={{ background: severityColor(evt.severity) + "33", borderColor: severityColor(evt.severity) }}
-                >
-                  <div className="h-2 w-2 rounded-full" style={{ background: severityColor(evt.severity) }} />
-                </div>
-
-                {/* Card */}
-                <Link
-                  href={"/events/" + evt.id}
-                  className="flex-1 rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 hover:border-zinc-600 hover:bg-zinc-900/70 transition"
-                >
-                  <div className="flex flex-wrap items-center gap-2 text-xs">
-                    <span className="font-mono text-zinc-500">EVT-{shortId(evt.id)}</span>
-                    <span className={"rounded border px-1.5 py-0.5 font-medium uppercase " + severityBadge(evt.severity)}>
-                      {evt.severity}
-                    </span>
-                    {evt.mitre_technique && evt.mitre_technique !== "unknown" && (
-                      <span className="rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-purple-300">
-                        {evt.mitre_technique} · {MITRE_NAMES[evt.mitre_technique] ?? ""}
-                      </span>
+            {(() => {
+              let lastDate = "";
+              return events.map((evt) => {
+                const dateStr = new Date(evt.event_time).toISOString().slice(0, 10);
+                const showDivider = dateStr !== lastDate;
+                lastDate = dateStr;
+                return (
+                  <div key={evt.id}>
+                    {showDivider && (
+                      <div className="relative flex items-center gap-3 pl-10 py-2">
+                        <div className="absolute left-0 flex h-6 w-6 items-center justify-center">
+                          <div className="h-2 w-2 rounded-full bg-zinc-600" />
+                        </div>
+                        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">
+                          {new Date(dateStr).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                        <div className="flex-1 h-px bg-zinc-800" />
+                      </div>
                     )}
-                    <span className="ml-auto text-zinc-500 tabular-nums">
-                      {new Date(evt.event_time).toISOString().replace("T", " ").slice(0, 19)}
-                    </span>
+                    <div className="relative flex gap-4 pl-10">
+                      <div
+                        className="absolute left-0 top-4 h-6 w-6 rounded-full border-2 border-zinc-900 flex items-center justify-center"
+                        style={{ background: severityColor(evt.severity) + "33", borderColor: severityColor(evt.severity) }}
+                      >
+                        <div className="h-2 w-2 rounded-full" style={{ background: severityColor(evt.severity) }} />
+                      </div>
+                      <Link
+                        href={"/events/" + evt.id}
+                        className="flex-1 rounded-md border border-zinc-800 bg-zinc-900/40 px-4 py-3 hover:border-zinc-600 hover:bg-zinc-900/70 transition"
+                      >
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-mono text-zinc-500">EVT-{shortId(evt.id)}</span>
+                          <span className={"rounded border px-1.5 py-0.5 font-medium uppercase " + severityBadge(evt.severity)}>
+                            {evt.severity}
+                          </span>
+                          {evt.mitre_technique && evt.mitre_technique !== "unknown" && (
+                            <span className="rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-purple-300">
+                              {evt.mitre_technique} · {MITRE_NAMES[evt.mitre_technique] ?? ""}
+                            </span>
+                          )}
+                          {(evt as {source_label?: string}).source_label && (
+                            <span className="rounded border border-zinc-700 bg-zinc-800/40 px-1.5 py-0.5 text-zinc-500">
+                              {(evt as {source_label?: string}).source_label}
+                            </span>
+                          )}
+                          <span className="ml-auto text-zinc-500 tabular-nums">
+                            {new Date(evt.event_time).toISOString().replace("T", " ").slice(0, 19)}
+                          </span>
+                        </div>
+                        <p className="mt-1.5 text-sm text-zinc-300 line-clamp-2">
+                          {evt.ai_summary ?? evt.raw_payload.slice(0, 120)}
+                        </p>
+                      </Link>
+                    </div>
                   </div>
-                  <p className="mt-1.5 text-sm text-zinc-300 line-clamp-2">
-                    {evt.ai_summary ?? evt.raw_payload.slice(0, 120)}
-                  </p>
-                </Link>
-              </div>
-            ))}
+                );
+              });
+            })()}
           </div>
         </div>
 

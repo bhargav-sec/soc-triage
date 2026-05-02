@@ -36,6 +36,11 @@ def load_config(path: str) -> dict:
     cfg.setdefault("api_key", "")
     cfg.setdefault("dry_run", False)
     cfg.setdefault("log_file", "/var/log/auth.log")
+    if not cfg.get("source_label"):
+        cfg["source_label"] = "session-" + datetime.datetime.now().strftime("%Y-%m-%d")
+    # Auto-tag session with start date if not explicitly set
+    if not cfg.get("source_label"):
+        cfg["source_label"] = "session-" + datetime.datetime.now().strftime("%Y-%m-%d")
 
     for k in ["target_url", "source_host"]:
         if not cfg.get(k):
@@ -181,6 +186,7 @@ def tail_file(cfg: dict, logger: logging.Logger):
             for line in lines:
                 event = parse_line(line, cfg["source_host"], cfg["source_type"])
                 if event:
+                    event["source_label"] = cfg.get("source_label", "")
                     post_event(event, cfg, logger)
             time.sleep(poll)
 
@@ -193,6 +199,7 @@ def replay_file(path: str, cfg: dict, logger: logging.Logger):
         for line in f:
             event = parse_line(line, cfg["source_host"], cfg["source_type"])
             if event:
+                event["source_label"] = cfg.get("source_label", "")
                 post_event(event, cfg, logger)
                 sent += 1
                 time.sleep(0.2)  # gentle rate limiting
