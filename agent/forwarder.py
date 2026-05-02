@@ -202,7 +202,7 @@ def replay_file(path: str, cfg: dict, logger: logging.Logger):
                 event["source_label"] = cfg.get("source_label", "")
                 post_event(event, cfg, logger)
                 sent += 1
-                time.sleep(0.2)  # gentle rate limiting
+                time.sleep(3.0)  # stay under Groq free tier limit (30 req/min)
     logger.info(f"Replay complete — {sent} events sent.")
 
 # ── Entry point ───────────────────────────────────────────────────────────────
