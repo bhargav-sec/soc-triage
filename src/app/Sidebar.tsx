@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import HostLinks from "./HostLinks";
 import { useState, Suspense } from "react";
 
 const NAV = [
@@ -143,6 +144,8 @@ function SidebarInner() {
           );
         })}
       </nav>
+
+      <HostLinks />
 
       {/* Footer */}
       <div className="border-t border-zinc-800 px-3 py-3">

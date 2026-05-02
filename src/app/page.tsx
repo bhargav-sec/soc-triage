@@ -4,7 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase";
 import SendSampleButton from "./SendSampleButton";
 import RefreshButton from "./RefreshButton";
 import ViewTabs from "./HiddenClosedToggle";
-import SelectableEventList from "./SelectableEventList";
+import QueueEventList from "./QueueEventList";
 import SeverityFilter from "./SeverityFilter";
 
 export const dynamic = "force-dynamic";
@@ -284,6 +284,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
   <Suspense fallback={<div className="h-8" />}>
     <SeverityFilter />
     <ViewTabs />
+          <GroupToggle />
   </Suspense>
 </div>
         </header>
@@ -354,7 +355,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             })}
 
             {/* Event rows — selectable for bulk dismiss */}
-            <SelectableEventList
+            <QueueEventList
               events={items
                 .filter((i): i is { kind: "event"; row: EventRow; sortAt: string } => i.kind === "event")
                 .map(i => i.row)}
