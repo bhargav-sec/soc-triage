@@ -1,0 +1,16 @@
+services:
+  - type: worker
+    name: soc-forwarder
+    runtime: python
+    rootDir: agent
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 forwarder.py
+    envVars:
+      - key: SOC_TARGET_URL
+        value: https://soc-triage-bhargav-secs-projects.vercel.app/api/ingest
+      - key: SOC_SOURCE_HOST
+        value: honeypot-01
+      - key: SOC_LOG_FILE
+        value: /var/log/syslog
+      - key: SOC_DRY_RUN
+        value: "false"

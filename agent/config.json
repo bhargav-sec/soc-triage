@@ -1,0 +1,10 @@
+{
+  "target_url": "https://soc-triage-bhargav-secs-projects.vercel.app/api/ingest",
+  "source_host": "honeypot-01",
+  "source_type": "linux_auth",
+  "log_file": "/tmp/fake-auth.log",
+  "poll_interval_seconds": 5,
+  "api_key": "",
+  "batch_size": 10,
+  "dry_run": false
+}
