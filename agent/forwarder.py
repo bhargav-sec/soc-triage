@@ -5,7 +5,7 @@ Tails a log file and POSTs each new line to the SOC Triage ingest API.
 Reads config from env vars (SOC_*) with fallback to config.json.
 """
 
-import json, os, re, sys, time, datetime, argparse, logging
+import json, os, re, sys, time, datetime, argparse, logging, random
 import urllib.request, urllib.error
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -206,12 +206,54 @@ def replay_file(path: str, cfg: dict, logger: logging.Logger):
     logger.info(f"Replay complete — {sent} events sent.")
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+SIMULATE_USERS = ["root", "admin", "bhargav", "ubuntu", "ec2-user", "git"]
+SIMULATE_IPS = ["185.220.101.42", "198.51.100.99", "203.0.113.45", "192.0.2.1", "198.18.0.55", "45.33.32.156"]
+SIMULATE_PORTS = [22, 2222, 22222]
+SIMULATE_TEMPLATES = [
+    "Failed password for {user} from {ip} port {port} ssh2",
+    "Failed password for invalid user {user} from {ip} port {port} ssh2",
+    "Accepted publickey for {user} from {ip} port {port} ssh2",
+    "Invalid user {user} from {ip} port {port}",
+    "{user} : 3 incorrect password attempts ; TTY=pts/0 ; PWD=/home/{user} ; USER=root ; COMMAND=/bin/bash",
+    "session opened for user {user} by (uid=0)",
+    "session closed for user {user}",
+]
 
+
+def make_fake_line() -> str:
+    now = datetime.datetime.utcnow()
+    month = now.strftime("%b")
+    day = str(now.day).rjust(2)
+    ts = now.strftime("%H:%M:%S")
+    host = "honeypot-sim"
+    template = random.choice(SIMULATE_TEMPLATES)
+    user = random.choice(SIMULATE_USERS)
+    ip = random.choice(SIMULATE_IPS)
+    port = random.choice(SIMULATE_PORTS)
+    msg = template.format(user=user, ip=ip, port=port)
+    if "password attempt" in template or "incorrect" in template:
+        service = "sudo"
+    else:
+        service = "sshd[" + str(random.randint(10000, 99999)) + "]"
+    return f"{month} {day} {ts} {host} {service}: {msg}"
+
+def simulate(cfg: dict, logger: logging.Logger):
+    interval = float(cfg.get("poll_interval_seconds", 5))
+    logger.info("Simulate mode started. Generating fake auth events every %.1fs", interval)
+    while True:
+        line = make_fake_line()
+        logger.info("SIM: %s", line)
+        event = parse_line(line, cfg.get("source_host", "honeypot-sim"), "linux_auth")
+        if event:
+            event["source_label"] = cfg.get("source_label", "simulate")
+            post_event(event, cfg, logger)
+        time.sleep(interval)
 def main():
     parser = argparse.ArgumentParser(description="SOC Triage forwarder agent")
     parser.add_argument("--config", default=os.path.join(os.path.dirname(__file__), "config.json"))
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--replay", metavar="FILE", help="Replay a log file from start then exit")
+    parser.add_argument("--simulate", action="store_true", help="Generate fake auth events instead of tailing a file")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -225,10 +267,18 @@ def main():
     if args.dry_run:
         cfg["dry_run"] = True
 
-    if args.replay:
+    if args.simulate:
+        simulate(cfg, logger)
+    elif args.replay:
         replay_file(args.replay, cfg, logger)
     else:
         tail_file(cfg, logger)
 
 if __name__ == "__main__":
     main()
+
+
+# ── Simulate mode ─────────────────────────────────────────────────────────────
+
+
+
