@@ -1,0 +1,9 @@
+[phases.setup]
+nixPkgs = ["python311"]
+
+[phases.install]
+
+[phases.build]
+
+[start]
+cmd = "python agent/forwarder.py --simulate --config agent/config.json"
