@@ -21,10 +21,10 @@ type EventRow = {
 const MITRE_NAMES: Record<string, string> = {
   "T1110.001": "Password Guessing",
   "T1110.003": "Password Spraying",
-  "T1078": "Valid Accounts",
+  "T1078":     "Valid Accounts",
   "T1548.003": "Sudo Abuse",
-  "T1136": "Create Account",
-  "T1098": "Account Manipulation",
+  "T1136":     "Create Account",
+  "T1098":     "Account Manipulation",
 };
 
 function shortId(uuid: string) { return uuid.split("-")[0].toUpperCase(); }
@@ -33,7 +33,7 @@ function summarize(row: EventRow): string {
   if (row.ai_summary) return row.ai_summary;
   const p = row.parsed ?? {};
   const user = typeof p.username === "string" ? p.username : null;
-  const ip = typeof p.source_ip === "string" ? p.source_ip : null;
+  const ip   = typeof p.source_ip === "string" ? p.source_ip : null;
   const result = typeof p.auth_result === "string" ? p.auth_result : null;
   const service = typeof p.service === "string" ? p.service : row.source_type;
   if (user && ip && result) return service + " " + result + " for user " + user + " from " + ip;
@@ -60,13 +60,18 @@ function statusBadgeClass(s: string) {
   }
 }
 
-type Props = { events: EventRow[] };
+type Props = {
+  events: EventRow[];
+  focusIdx?: number;
+  onDelete?: (id: string) => void;
+};
 
-export default function SelectableEventList({ events }: Props) {
+export default function SelectableEventList({ events, focusIdx = -1, onDelete }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   function toggle(id: string) {
-    setSelected((prev) => {
+    setSelected(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
@@ -74,11 +79,16 @@ export default function SelectableEventList({ events }: Props) {
   }
 
   function toggleAll() {
-    if (selected.size === events.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(events.map((e) => e.id)));
-    }
+    if (selected.size === events.length) setSelected(new Set());
+    else setSelected(new Set(events.map(e => e.id)));
+  }
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDeleting(id);
+    await onDelete?.(id);
+    setDeleting(null);
   }
 
   const selectedIds = Array.from(selected);
@@ -86,7 +96,6 @@ export default function SelectableEventList({ events }: Props) {
 
   return (
     <div className="space-y-3">
-      {/* Select-all row */}
       {events.length > 0 && (
         <div className="flex items-center gap-2 px-1">
           <input
@@ -102,38 +111,34 @@ export default function SelectableEventList({ events }: Props) {
         </div>
       )}
 
-      {/* Bulk dismiss bar — floats above the list when items are selected */}
-      <BulkDismissBar
-        selectedIds={selectedIds}
-        onClear={() => setSelected(new Set())}
-      />
+      <BulkDismissBar selectedIds={selectedIds} onClear={() => setSelected(new Set())} />
 
-      {/* Event rows */}
       <ul className="space-y-2">
-        {events.map((row) => {
+        {events.map((row, idx) => {
           const isSelected = selected.has(row.id);
+          const isFocused  = idx === focusIdx;
           return (
-            <li key={row.id} className="flex items-start gap-2">
-              {/* Checkbox */}
+            <li key={row.id} className="flex items-start gap-2 group">
               <div className="mt-4 flex-shrink-0 pl-1">
                 <input
                   type="checkbox"
                   checked={isSelected}
                   onChange={() => toggle(row.id)}
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={e => e.stopPropagation()}
                   className="h-3.5 w-3.5 rounded border-zinc-600 bg-zinc-800 accent-zinc-400 cursor-pointer"
                   aria-label={"Select event " + shortId(row.id)}
                 />
               </div>
 
-              {/* Card */}
               <Link
                 href={"/events/" + row.id}
                 className={
                   "flex-1 block rounded-md border p-4 transition " +
-                  (isSelected
-                    ? "border-zinc-600 bg-zinc-800/70"
-                    : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-600 hover:bg-zinc-900/70")
+                  (isFocused
+                    ? "border-zinc-500 bg-zinc-800/80 ring-1 ring-zinc-500/40"
+                    : isSelected
+                      ? "border-zinc-600 bg-zinc-800/70"
+                      : "border-zinc-800 bg-zinc-900/40 hover:border-zinc-600 hover:bg-zinc-900/70")
                 }
               >
                 <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -162,7 +167,25 @@ export default function SelectableEventList({ events }: Props) {
                   <span className="ml-auto text-zinc-500">
                     {new Date(row.event_time).toISOString()}
                   </span>
+
+                  {/* Delete button */}
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={e => handleDelete(e, row.id)}
+                      disabled={deleting === row.id}
+                      className="ml-1 rounded border border-red-900/40 bg-red-900/10 px-1.5 py-0.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-900/30 transition disabled:opacity-50"
+                      aria-label="Delete event"
+                    >
+                      {deleting === row.id ? "…" : (
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                        </svg>
+                      )}
+                    </button>
+                  )}
                 </div>
+
                 <div className="mt-3 space-y-2 text-sm">
                   <div>
                     <span className="text-zinc-500">Observed:</span>{" "}
@@ -170,11 +193,9 @@ export default function SelectableEventList({ events }: Props) {
                   </div>
                   <div>
                     <span className="text-zinc-500">Why suspicious:</span>{" "}
-                    {row.ai_reasoning ? (
-                      <span className="text-zinc-100">{row.ai_reasoning}</span>
-                    ) : (
-                      <span className="text-zinc-500 italic">not yet scored</span>
-                    )}
+                    {row.ai_reasoning
+                      ? <span className="text-zinc-100">{row.ai_reasoning}</span>
+                      : <span className="text-zinc-500 italic">not yet scored</span>}
                   </div>
                 </div>
               </Link>
