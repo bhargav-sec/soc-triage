@@ -5,6 +5,7 @@ import SendSampleButton from "./SendSampleButton";
 import RefreshButton from "./RefreshButton";
 import ViewTabs from "./HiddenClosedToggle";
 import QueueEventList from "./QueueEventList";
+import QueueControls from "./QueueControls";
 import SeverityFilter from "./SeverityFilter";
 
 export const dynamic = "force-dynamic";
@@ -354,6 +355,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             })}
 
             {/* Event rows — selectable for bulk dismiss */}
+            <QueueControls totalCount={events.length} />
+
             <QueueEventList
               events={items
                 .filter((i): i is { kind: "event"; row: EventRow; sortAt: string } => i.kind === "event")
