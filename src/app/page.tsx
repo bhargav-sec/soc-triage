@@ -355,7 +355,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
             })}
 
             {/* Event rows — selectable for bulk dismiss */}
-            <QueueControls totalCount={events.length} />
+            <QueueControls totalCount={items.filter(i => i.kind === 'event').length} />
 
             <QueueEventList
               events={items
