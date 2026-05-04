@@ -174,7 +174,7 @@ export default function SelectableEventList({ events, focusIdx = -1, onDelete }:
                       type="button"
                       onClick={e => handleDelete(e, row.id)}
                       disabled={deleting === row.id}
-                      className="ml-1 rounded border border-red-900/40 bg-red-900/10 px-1.5 py-0.5 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-900/30 transition disabled:opacity-50"
+                      className="ml-1 rounded border border-red-900/40 bg-red-900/10 px-1.5 py-0.5 text-red-400 opacity-30 hover:opacity-100 hover:bg-red-900/30 transition disabled:opacity-50"
                       aria-label="Delete event"
                     >
                       {deleting === row.id ? "…" : (
