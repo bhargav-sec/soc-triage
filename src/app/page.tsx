@@ -308,6 +308,8 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
           </div>
         )}
 
+        {!error && <QueueControls totalCount={items.filter(i => i.kind === 'event').length} />}
+
         {!error && items.length > 0 && (
           <div className="mt-6 space-y-3">
             {/* Investigation rows */}
@@ -353,9 +355,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ v
                 </li>
               );
             })}
-
-            {/* Event rows — selectable for bulk dismiss */}
-            <QueueControls totalCount={items.filter(i => i.kind === 'event').length} />
 
             <QueueEventList
               events={items
