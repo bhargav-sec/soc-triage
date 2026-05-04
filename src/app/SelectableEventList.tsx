@@ -168,22 +168,6 @@ export default function SelectableEventList({ events, focusIdx = -1, onDelete }:
                     {new Date(row.event_time).toISOString()}
                   </span>
 
-                  {/* Delete button */}
-                  {onDelete && (
-                    <button
-                      type="button"
-                      onClick={e => handleDelete(e, row.id)}
-                      disabled={deleting === row.id}
-                      className="ml-1 rounded border border-red-900/40 bg-red-900/10 px-1.5 py-0.5 text-red-400 opacity-30 hover:opacity-100 hover:bg-red-900/30 transition disabled:opacity-50"
-                      aria-label="Delete event"
-                    >
-                      {deleting === row.id ? "…" : (
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
-                        </svg>
-                      )}
-                    </button>
-                  )}
                 </div>
 
                 <div className="mt-3 space-y-2 text-sm">
@@ -199,6 +183,20 @@ export default function SelectableEventList({ events, focusIdx = -1, onDelete }:
                   </div>
                 </div>
               </Link>
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => handleDelete({ preventDefault: ()=>{}, stopPropagation: ()=>{} } as React.MouseEvent, row.id)}
+                  disabled={deleting === row.id}
+                  className="mt-3 self-start rounded border border-red-900/40 bg-red-900/10 px-2 py-1.5 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition disabled:opacity-50 text-xs flex items-center gap-1"
+                  aria-label="Delete event"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+                  </svg>
+                  {deleting === row.id ? "Deleting…" : "Delete"}
+                </button>
+              )}
             </li>
           );
         })}
