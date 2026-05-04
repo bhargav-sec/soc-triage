@@ -5,6 +5,7 @@
   },
   "deploy": {
     "startCommand": "python forwarder.py --simulate --config config.json",
-    "restartPolicyType": "ON_FAILURE"
+    "restartPolicyType": "ON_FAILURE",
+    "numReplicas": 1
   }
 }
